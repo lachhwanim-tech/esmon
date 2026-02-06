@@ -1,7 +1,7 @@
 // googleApiHandler.js - Updated for Sanket 2.0 (New ID & FormData Fix)
 
 // REPLACE WITH YOUR NEW DEPLOYMENT URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyr-wL3QqRHlQdwuq-v-VF5c9fFlMtygsHlbWxWfpappl-lIQrzYRnpPAplWr8c9hPC/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxYhnChVwHi-p7vSegGJjVfsWwFUZcXAyT1l9VqJUgAd4rsZvpEd_nOoZCrgATVvCe/exec';
 
 /**
  * Gathers metadata and the file, and sends them to Google Apps Script
