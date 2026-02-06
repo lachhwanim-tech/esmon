@@ -475,15 +475,15 @@
                 </table>
             `;
 
-            // Driving Analysis (MODIFIED SECTION)
-        document.getElementById('driving-analysis').innerHTML = `
+            // Driving Analysis (UPDATED FOR 2000m-0m PATTERN)
+            document.getElementById('driving-analysis').innerHTML = `
               <h2>Driving Analysis</h2>
     ${reportData.stops?.length > 0 ? `
         <table class="report-table">
             <tr>
-                <th>Sr. No.</th><th>Stop Location</th><th>Stop Timing</th><th>Start Timing</th><th>Km</th>
-                <th>1000m</th><th>800m</th><th>500m</th><th>100m</th><th>50m</th>
-                <th>System Generated Analysis</th>
+                <th>Sr.</th><th>Location</th><th>Stop Time</th><th>Start Time</th><th>Km</th>
+                <th>2000m</th><th>1000m</th><th>800m</th><th>600m</th><th>500m</th><th>400m</th><th>300m</th><th>100m</th><th>50m</th><th>20m</th><th>0m</th>
+                <th>System</th>
                 <th>CLI Remark</th>
             </tr>
             ${reportData.stops.map((stop, index) => `
@@ -493,11 +493,17 @@
                     <td>${stop.timeString}</td>
                     <td>${stop.startTiming}</td>
                     <td>${(stop.kilometer / 1000).toFixed(2)}</td>
-                    <td>${stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[0] || 'NA'}</td>
+                    <td>${stop.speedsBefore[1] || 'NA'}</td>
+                    <td>${stop.speedsBefore[2] || 'NA'}</td>
+                    <td>${stop.speedsBefore[3] || 'NA'}</td>
+                    <td>${stop.speedsBefore[4] || 'NA'}</td>
+                    <td>${stop.speedsBefore[5] || 'NA'}</td>
+                    <td>${stop.speedsBefore[6] || 'NA'}</td>
+                    <td>${stop.speedsBefore[7] || 'NA'}</td>
+                    <td>${stop.speedsBefore[8] || 'NA'}</td>
+                    <td>${stop.speedsBefore[9] || 'NA'}</td>
+                    <td>${stop.speedsBefore[10] || 'NA'}</td>
                     <td class="system-analysis">
                         <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
                             <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
@@ -505,7 +511,7 @@
                         </select>
                     </td>
                     <td>
-                        <input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Enter remark..." style="width: 95%;">
+                        <input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Remark..." style="width: 90%;">
                     </td>
                 </tr>
             `).join('')}
@@ -1180,7 +1186,7 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
         }
         y += 10;
 
-        // --- Driving Analysis ---
+       // --- Driving Analysis (PDF) ---
         doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
         y = checkPageOverflow(y, 10);
         doc.text('Driving Analysis', margin, y);
@@ -1188,40 +1194,56 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
         y += 10;
 
         if (reportData.stops?.length > 0) {
-            // Using autoTable here for simplicity as it's complex
              const drivingBody = reportData.stops.map((stop, index) => {
                  const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
                  const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
                  const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
                  const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
+                 
+                 // Updated Data Array with 11 Speeds
                  return [
-                     stop.group, stop.stopLocation, stop.timeString, stop.startTiming,
+                     stop.group, 
+                     stop.stopLocation, 
+                     stop.timeString.split(' ')[1] || stop.timeString, // Only show Time to save space
                      (stop.kilometer / 1000).toFixed(2),
-                     stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'NA',
-                     stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'NA',
-                     stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'NA',
-                     stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'NA',
-                     stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'NA',
+                     stop.speedsBefore[0] || '-', // 2000
+                     stop.speedsBefore[1] || '-', // 1000
+                     stop.speedsBefore[2] || '-', // 800
+                     stop.speedsBefore[3] || '-', // 600
+                     stop.speedsBefore[4] || '-', // 500
+                     stop.speedsBefore[5] || '-', // 400
+                     stop.speedsBefore[6] || '-', // 300
+                     stop.speedsBefore[7] || '-', // 100
+                     stop.speedsBefore[8] || '-', // 50
+                     stop.speedsBefore[9] || '-', // 20
+                     stop.speedsBefore[10]|| '0', // 0
                      finalSystemAnalysis,
                      cliRemark
                  ];
              });
-             doc.autoTable({
-                 startY: y,
-                 head: [['Sr', 'Location', 'Stop', 'Start', 'Km', '1000', '800', '500', '100', '50', 'System', 'CLI Remark']],
-                 body: drivingBody,
-                 theme: 'grid',
-                 headStyles: { fillColor: [0, 51, 102], fontSize: 8, cellPadding: 1, textColor: 255 }, // NEW: Font 7 -> 8
-                 bodyStyles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' }, // NEW: Font 7 -> 8
-                 columnStyles: {
 
-                     // NEW: Column widths redistribute kiye gaye (Total 180)
-                     0: { cellWidth: 9 }, 1: { cellWidth: 27 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, // Col 1 ko 28 se 27 kiya
-                     4: { cellWidth: 11 }, 5: { cellWidth: 9 }, 6: { cellWidth: 9 }, 7: { cellWidth: 9 },
-                     8: { cellWidth: 9 }, 9: { cellWidth: 9 }, 10: { cellWidth: 21 }, 11: { cellWidth: 25}
-                 },
-                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
-             });
+             doc.autoTable({
+                 startY: y,
+                 // Short headers to fit page
+                 head: [['Sr', 'Loc', 'Time', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'Sys', 'Rem']],
+                 body: drivingBody,
+                 theme: 'grid',
+                 headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1, textColor: 255, halign: 'center' },
+                 bodyStyles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak', halign: 'center' },
+                 columnStyles: {
+                     0: { cellWidth: 6 },  // Sr
+                     1: { cellWidth: 15 }, // Loc
+                     2: { cellWidth: 12 }, // Time
+                     3: { cellWidth: 10 }, // Km
+                     // Speed cols (approx 7mm each)
+                     4: { cellWidth: 6 }, 5: { cellWidth: 6 }, 6: { cellWidth: 6 }, 7: { cellWidth: 6 },
+                     8: { cellWidth: 6 }, 9: { cellWidth: 6 }, 10: { cellWidth: 6 }, 11: { cellWidth: 6 },
+                     12: { cellWidth: 6 }, 13: { cellWidth: 6 }, 14: { cellWidth: 6 },
+                     15: { cellWidth: 10 }, // Sys
+                     16: { cellWidth: 'auto' } // Remark
+                 },
+                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
+             });
              y = doc.lastAutoTable.finalY + 10;
         } else {
             doc.setFontSize(10).setFont('helvetica', 'normal');
