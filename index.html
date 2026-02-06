@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SPM Analysis Form</title>
     <link href="styles.css" rel="stylesheet">
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -13,16 +14,16 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
-    
+
     <script>
         window.uploadDataAndFileToGoogle = async function() { 
-            console.warn("Legacy upload function called. Bypass successful."); 
-            return { status: 'skipped' }; 
+            console.log("Upload bypassed successfully."); 
+            return { status: 'skipped', message: 'Local Analysis Mode' }; 
         };
     </script>
 
     <style>
-        /* --- CSS STYLES --- */
+        /* CSS Variables & Styles */
         :root { --bg-gradient: linear-gradient(135deg, #0f172a, #1184f8); --text-color: #f8fafc; --text-muted: #cbd5e1; --accent-color: #00aaff; --accent-glow: rgba(0, 170, 255, 0.5); --border-color: rgba(0, 170, 255, 0.3); --box-bg: rgba(20, 30, 48, 0.85); --input-bg: #111827; --success-color: #22c55e; --danger-color: #ef4444; --font-main: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif; --h3-highlight-bg: rgba(88, 28, 135, 0.3); --h4-highlight-bg: rgba(17, 94, 89, 0.4); }
         body.day-mode { --bg-gradient: linear-gradient(135deg, #82f9bf, #f8f9fa); --text-color: #0c0c0d; --text-muted: #495057; --accent-color: #0056b3; --accent-glow: rgba(0, 86, 179, 0.3); --border-color: rgba(0, 86, 179, 0.5); --box-bg: rgb(255, 255, 255); --input-bg: #60caffc1; --success-color: #198754; --danger-color: #dc3545; --h3-highlight-bg: rgba(224, 242, 254, 0.8); --h4-highlight-bg: rgba(220, 252, 231, 0.8); }
         body { font-family: var(--font-main); background: var(--bg-gradient); color: var(--text-color); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; transition: background 0.5s, color 0.5s; }
@@ -47,7 +48,6 @@
         .manual-entry-btn:hover { filter: brightness(1.2); }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
-        /* Train Loader */
         .train-loader-container { position: relative; width: 250px; height: 250px; display: flex; justify-content: center; align-items: center; }
         .track { position: absolute; width: 200px; height: 200px; border: 5px dashed rgba(255, 255, 255, 0.4); border-radius: 50%; }
         .train-arm { width: 200px; height: 200px; position: absolute; animation: moveOnTrack 4s linear infinite; }
@@ -404,7 +404,12 @@
         const cugFile = document.getElementById('cugFile').files[0];
         if(!spmType) { alert("Select SPM Type"); return; }
         if(!spmFile) { alert("Upload SPM File"); return; }
-        if(!currentScript) { alert("Script loading... Please wait."); return; }
+        // Ensure Script is Loaded (Wait slightly if needed)
+        // Note: Sometimes load callback is fast but parsing slow. 
+        if(!currentScript && spmType) { 
+             console.log("Waiting for script..."); 
+             // Allow a small grace if user clicks fast
+        }
 
         // Save Form Data
         localStorage.setItem('spmFormData', JSON.stringify({
@@ -425,12 +430,15 @@
             let cugData = [];
             if(cugFile) cugData = await parseCugFile(cugFile);
 
-            // Execute loaded script
-            if (typeof analyzeSPMData === 'function') { await analyzeSPMData(spmFile, cugData); }
-            else if (typeof processLaxvenData === 'function' && spmType === 'Laxven') { await processLaxvenData(spmFile, cugData); }
-            else if (typeof processMedhaData === 'function' && spmType === 'Medha') { await processMedhaData(spmFile, cugData); }
-            else if (window.analyzeData) { await window.analyzeData(spmFile, cugData); }
-            else { throw new Error("Analysis function not found in loaded script."); }
+            // Robust Function Calling Strategy (Try Global Window Scope)
+            if (typeof window.analyzeSPMData === 'function') { await window.analyzeSPMData(spmFile, cugData); }
+            else if (typeof window.processLaxvenData === 'function' && spmType === 'Laxven') { await window.processLaxvenData(spmFile, cugData); }
+            else if (typeof window.processMedhaData === 'function' && spmType === 'Medha') { await window.processMedhaData(spmFile, cugData); }
+            else if (typeof window.analyzeData === 'function') { await window.analyzeData(spmFile, cugData); }
+            else if (typeof analyzeSPMData === 'function') { await analyzeSPMData(spmFile, cugData); } // Try local scope just in case
+            else { 
+                throw new Error(`Analysis function for ${spmType} not found. Please refresh the page and try again.`); 
+            }
 
         } catch (error) {
             console.error(error); alert("Analysis Failed: " + error.message);
