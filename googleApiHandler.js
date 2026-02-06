@@ -1,54 +1,62 @@
-// googleApiHandler.js - Updated for Sanket 2.0 (New ID & FormData Fix)
+// googleApiHandler.js - REVERTED TO BASE64 (Stable Version)
 
-// REPLACE WITH YOUR NEW DEPLOYMENT URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxYhnChVwHi-p7vSegGJjVfsWwFUZcXAyT1l9VqJUgAd4rsZvpEd_nOoZCrgATVvCe/exec';
+// Yahan apni 'xx' wali ID dalein (ya agar nayi mili ho to wo)
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxY1rk4kWXqueYg7iBWvz1jIlVfmD_F8gtoC8sXm4VMf8Xsq1ghqhj7zXH58NNhMhW0/exec';
 
-/**
- * Gathers metadata and the file, and sends them to Google Apps Script
- * using FormData (Multipart) which matches the Code.gs logic.
- */
+// Helper to convert File to Base64
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const encoded = reader.result.toString().replace(/^data:(.*,)?/, '');
+            if ((encoded.length % 4) > 0) {
+                encoded += '='.repeat(4 - (encoded.length % 4));
+            }
+            resolve(encoded);
+        };
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
 async function uploadDataAndFileToGoogle() {
-    // --- 1. DEFINE ALLOWED HQS ---
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ'];
-
-    // Get Current HQ
     const currentHq = document.getElementById('cliHqDisplay') ? document.getElementById('cliHqDisplay').value.trim().toUpperCase() : '';
 
-    // --- 2. CHECK IF UPLOAD SHOULD BE SKIPPED ---
     if (!ALLOWED_HQS.includes(currentHq)) {
-        console.log(`CLI HQ (${currentHq}) is not in the allowed list. Skipping Google Drive Upload.`);
-        return { status: 'skipped', message: 'Skipped Drive Upload for Other Division HQ.' };
+        console.log(`Skipping Upload for HQ: ${currentHq}`);
+        return { status: 'skipped', message: 'Skipped Drive Upload.' };
     }
 
-    // Check for file
     const spmFile = document.getElementById('spmFile').files[0];
-    if (!spmFile) {
-        throw new Error("SPM file is not selected.");
+    if (!spmFile) throw new Error("SPM file is not selected.");
+
+    // --- PREPARE JSON PAYLOAD (NO FORM DATA) ---
+    const base64Content = await fileToBase64(spmFile);
+    
+    const payload = {
+        type: 'upload', // Backend will use this to route to handleFileUploadBase64
+        fileName: spmFile.name,
+        mimeType: spmFile.type || 'application/octet-stream',
+        fileContent: base64Content,
+        hq: currentHq,
+        section: document.getElementById('section').value,
+        trainNo: document.getElementById('trainNumber').value,
+        lpName: document.getElementById('lpName').value
+    };
+
+    // --- SEND AS JSON ---
+    try {
+        await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' }, // Avoid CORS preflight
+            body: JSON.stringify(payload)
+        });
+        
+        return { status: 'success', message: 'File uploaded successfully.' };
+    } catch (error) {
+        console.error("Upload Error:", error);
+        throw error;
     }
-
-    // --- 3. PREPARE FORM DATA (MULTIPART) ---
-    // Hum JSON use nahi karenge, kyuki Code.gs me 'handleFileUpload'
-    // multipart/form-data expect karta hai.
-    const formData = new FormData();
-    
-    // File append karein
-    formData.append('file', spmFile);
-    
-    // Metadata append karein (Logging ke liye)
-    formData.append('hq', currentHq);
-    formData.append('section', document.getElementById('section').value);
-    formData.append('trainNo', document.getElementById('trainNumber').value);
-    formData.append('lpName', document.getElementById('lpName').value);
-    
-    // Destination Folder ID (Optional, Code.gs me default set hai, par bhej sakte hain)
-    // formData.append('destinationId', '1n9ihJuA4Q0khKR-n_2YiZfn3a6jg28Gk'); 
-
-    // --- 4. UPLOAD TO DRIVE ---
-    await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors', // Google Script ke liye zaroori hai
-        body: formData   // Ab hum seedha FormData bhej rahe hain
-    });
-
-    return { status: 'success', message: 'File uploaded to Google Drive successfully.' };
 }
