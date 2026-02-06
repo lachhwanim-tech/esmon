@@ -1,7 +1,7 @@
 // googlesheet.js - Updated for Sanket 2.0 (New ID & Payload Fix)
 
 // REPLACE WITH YOUR NEW SCRIPT URL HERE
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyr-wL3QqRHlQdwuq-v-VF5c9fFlMtygsHlbWxWfpappl-lIQrzYRnpPAplWr8c9hPC/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxYhnChVwHi-p7vSegGJjVfsWwFUZcXAyT1l9VqJUgAd4rsZvpEd_nOoZCrgATVvCe/exec';
 
 async function sendDataToGoogleSheet(data) {
     // --- ALLOWED HQ LIST ---
