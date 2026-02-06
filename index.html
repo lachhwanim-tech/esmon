@@ -1419,104 +1419,82 @@ input:checked + .slider:before {
                 });
             };
 
+           // --- CORRECTED SUBMIT HANDLER (Paste this in index.html) ---
             document.getElementById('spmForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
+                e.preventDefault();
 
-    // --- YEH LINE ADD KAREIN (HQ ko save karne ke liye) ---
-    const hqValueToSave = document.getElementById('cliHqDisplay').value.trim();
-    localStorage.setItem('currentSessionHq', hqValueToSave);
-    console.log("HQ Saved for Session:", hqValueToSave);
-    // -----------------------------------------------------
-
-    // ... baaki purana code waisa hi rahega ...
-                // --- NEW: Submit Validation for CLI ID ---
+                // 1. Validation checks
                 const cliIdVal = document.getElementById('cliIdInput').value;
-                if(!cliIdVal) {
-                    alert("Please enter a valid CLI ID.");
-                    return;
-                }
-                // --- End Validation ---
+                if(!cliIdVal) { alert("Please enter a valid CLI ID."); return; }
 
                 const spmType = document.getElementById('spmType').value;
                 const spmFile = document.getElementById('spmFile').files[0];
                 const cugFile = document.getElementById('cugFile').files[0];
 
-                if (!spmType) {
-                    alert('Please select an SPM Type.');
-                    return;
-                }
-                if (!spmFile) {
-                    alert('Please upload an SPM file.');
-                    return;
-                }
+                if (!spmType) { alert('Please select an SPM Type.'); return; }
+                if (!spmFile) { alert('Please upload an SPM file.'); return; }
+
+                // 2. SAVE FORM DATA TO LOCAL STORAGE (Crucial for Google Sheet later)
+                const formData = {
+                    cliId: cliIdVal,
+                    cliName: document.getElementById('cliName').value,
+                    journeyDate: document.getElementById('fromDateTime').value, 
+                    fromStation: document.getElementById('fromSection').value,
+                    toStation: document.getElementById('toSection').value,
+                    lpGroupCli: document.getElementById('lpGroupCli').value,
+                    alpGroupCli: document.getElementById('alpGroupCli').value,
+                    locoNumber: document.getElementById('locoNumber').value,
+                    mps: document.getElementById('maxPermissibleSpeed').value
+                };
+                
+                // Save data so googlesheet.js can read it on the next page
+                localStorage.setItem('spmFormData', JSON.stringify(formData));
+                
+                // Save HQ separately
+                const hqValue = document.getElementById('cliHqDisplay').value.trim();
+                localStorage.setItem('currentSessionHq', hqValue);
+
+                // 3. File Extension Check
                 const fileExt = spmFile.name.split('.').pop().toLowerCase();
-
-                // File Extension Validation
                 if (['Laxven', 'Telpro'].includes(spmType) && !['xlsx', 'xls'].includes(fileExt)) {
-                    alert(`Please upload an Excel file (.xlsx or .xls) for ${spmType} SPM.`);
-                    return;
+                    alert(`Please upload an Excel file for ${spmType}.`); return;
                 } else if (spmType === 'RTIS' && !['xlsx', 'xls', 'csv'].includes(fileExt)) {
-                    alert('Please upload an Excel (.xlsx/.xls) or CSV (.csv) file for RTIS SPM.');
-                    return;
+                    alert('Please upload Excel/CSV for RTIS.'); return;
                 } else if (spmType === 'Medha' && fileExt !== 'txt') {
-                    alert('Please upload a .txt file for Medha SPM.');
-                    return;
-                } else if ((spmType === 'MR' || spmType === 'VEL') && fileExt !== 'pdf') {
-                    alert('Please upload a .pdf file for MR or VEL SPM.');
-                    return;
+                    alert('Please upload .txt for Medha.'); return;
+                } else if (['MR', 'VEL'].includes(spmType) && fileExt !== 'pdf') {
+                    alert('Please upload .pdf for MR/VEL.'); return;
                 } else if (spmType === 'TelproNew' && !['xlsx', 'xls'].includes(fileExt)) {
-                    alert(`Please upload an Excel file (.xlsx or .xls) for ${spmType} SPM.`);
-                    return;
+                    alert(`Please upload an Excel file for ${spmType}.`); return;
                 }
 
-                if (!currentScript) {
-                    alert(`No script loaded for SPM Type: ${spmType}. Please select SPM Type first.`);
-                    return;
-                }
+                if (!currentScript) { alert(`Script not loaded for ${spmType}`); return; }
 
-                // --- 3. UPLOAD AND ANALYZE ---
-                // Show Loading Overlay
+                // 4. Start Analysis (ONLY LOCAL - NO UPLOAD)
                 document.getElementById('loadingOverlay').style.display = 'flex';
-
+                
                 try {
-                    // A. Attempt to upload/notify Google
-                    console.log("Calling uploadDataAndFileToGoogle...");
-                    const uploadResult = await uploadDataAndFileToGoogle();
-                    
-                    console.log("Upload Result:", uploadResult);
-
-                    if (uploadResult.status === 'success') {
-                        showToast('File uploaded to Drive successfully.');
-                    } else if (uploadResult.status === 'skipped') {
-                        showToast('Drive Upload skipped. Processing locally...');
-                    }
-
-                    // B. START LOCAL ANALYSIS
                     let cugData = [];
-                    if (cugFile) {
-                        cugData = await parseCugFile(cugFile);
-                    }
+                    if (cugFile) cugData = await parseCugFile(cugFile);
 
-                    // Check if the specific analysis function exists
+                    // Call the appropriate local analysis function
                     if (typeof analyzeSPMData === 'function') {
-                         await analyzeSPMData(spmFile, cugData); 
+                         await analyzeSPMData(spmFile, cugData);
                     } else if (typeof processLaxvenData === 'function' && spmType === 'Laxven') {
                          await processLaxvenData(spmFile, cugData);
                     } else if (typeof processMedhaData === 'function' && spmType === 'Medha') {
                          await processMedhaData(spmFile, cugData);
+                    } else if (window.analyzeData) {
+                         await window.analyzeData(spmFile, cugData);
                     } else {
-                         console.log("Looking for specific analysis function for: " + spmType);
-                         
-                         if(window.analyzeData) {
-                             await window.analyzeData(spmFile, cugData);
-                         } else {
-                             console.warn("Analysis function not found. Ensure " + spmType + ".js exports a processing function.");
-                         }
+                         console.warn("Analysis function not found.");
+                         alert("Error: Analysis script not ready. Try refreshing page.");
+                         document.getElementById('loadingOverlay').style.display = 'none';
                     }
 
                 } catch (error) {
-                    console.error('Error during processing:', error);
-                    alert('An error occurred: ' + error.message);
+                    console.error('Error during analysis:', error);
+                    alert('Analysis Error: ' + error.message);
                     document.getElementById('loadingOverlay').style.display = 'none';
                 }
             });
