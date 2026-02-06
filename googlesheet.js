@@ -1,12 +1,10 @@
-// googlesheet.js - Final Version
+// googlesheet.js - Updated & Fixed
 
-// ⚠️ PASTE YOUR NEW DEPLOYMENT URL HERE
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxj8eo_eB4KVwbEhBbL5yJamRemLDUbz_bcxTOliSEID9in1whdu0lA6yNCsFcidhKk/exec';
+// ⚠️ यहाँ STEP 1 से मिला नया URL पेस्ट करें
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyKbUTKLME_t5Ccln-GvLaBeOyCXhlwRuRv8V7g2hyO-IVSkYkuOUCAZ0bkAOaQgULx/exec';
 
 async function sendDataToGoogleSheet(data) {
-    const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DRZ', 'DURG'];
-
-    // Collect Checkbox Data
+    // --- START: DATA COLLECTION ---
     data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
     data.abnormality_bpt_nd = document.getElementById('chk-bpt-nd')?.checked ? 1 : 0;
     data.abnormality_bft_rule = document.getElementById('chk-bft-rule')?.checked ? 1 : 0;
@@ -31,27 +29,43 @@ async function sendDataToGoogleSheet(data) {
     const selectedActionRadio = document.querySelector('input[name="actionTakenRadio"]:checked');
     data.actionTaken = selectedActionRadio ? selectedActionRadio.value : 'NIL';
 
-    // Remove heavy objects
-    delete data.speedChartConfig; delete data.stopChartConfig; delete data.speedChartImage; delete data.stopChartImage;
+    // --- Clean up heavy items ---
+    delete data.speedChartConfig;
+    delete data.stopChartConfig;
+    delete data.speedChartImage;
+    delete data.stopChartImage;
 
-    // HQ Logic
+    // --- HQ Logic (Read directly from form) ---
     let currentHq = "UNKNOWN";
     const hqField = document.getElementById('cliHqDisplay');
-    if (hqField && hqField.value) { currentHq = hqField.value.trim().toUpperCase(); }
-    else { currentHq = localStorage.getItem('currentSessionHq') || "UNKNOWN"; }
+    if (hqField && hqField.value) {
+        currentHq = hqField.value.trim().toUpperCase();
+    } else {
+        // Fallback to localStorage if field is not on this page
+        currentHq = localStorage.getItem('currentSessionHq') || "UNKNOWN";
+    }
     data.cliHq = currentHq;
 
-    // Payload Wrapper for Backend
-    const finalPayload = { type: 'data', payload: data };
+    // --- PAYLOAD WRAPPING (महत्वपूर्ण सुधार) ---
+    // यह Backend को बताएगा कि यह 'data' है, फाइल नहीं
+    const finalPayload = {
+        type: 'data',  
+        payload: data
+    };
 
+    // --- SEND DATA ---
     try {
         await fetch(SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8', // JSON stringify ke liye safe header
+            },
             body: JSON.stringify(finalPayload)
         });
-        console.log('Data sent successfully.');
+
+        console.log('Data sent successfully to:', SCRIPT_URL);
+
     } catch (error) {
         console.error('Error sending data:', error);
         alert('Network Error. Data could not be sent.');
