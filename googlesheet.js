@@ -1,12 +1,9 @@
-// googlesheet.js - Fixed: Reads HQ from LocalStorage
+// googlesheet.js - Updated for Sanket 2.0 (New ID & Payload Fix)
+
+// REPLACE WITH YOUR NEW SCRIPT URL HERE
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyr-wL3QqRHlQdwuq-v-VF5c9fFlMtygsHlbWxWfpappl-lIQrzYRnpPAplWr8c9hPC/exec';
 
 async function sendDataToGoogleSheet(data) {
-    // 1. Primary Apps Script URL (Main Sheet - SPM ANALYSIS BANK)
-    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbwL22TaCt603ZWhbhbeO6V4TuoLACl5nNQiCPBKtl2Ofx1Q1EJtRy1k8tfimOZyXbQ7/exec';
-
-    // 2. Secondary Apps Script URL (Other Sheet - OTHER DIVISION)
-    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbwL22TaCt603ZWhbhbeO6V4TuoLACl5nNQiCPBKtl2Ofx1Q1EJtRy1k8tfimOZyXbQ7/exec'; 
-
     // --- ALLOWED HQ LIST ---
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DRZ', 'DURG'];
 
@@ -51,53 +48,41 @@ async function sendDataToGoogleSheet(data) {
         });
     }
     
+    // Clean up heavy chart data before sending
     delete data.speedChartConfig;
     delete data.stopChartConfig;
     delete data.speedChartImage;
     delete data.stopChartImage;
 
-    // --- CRITICAL FIX: READ HQ FROM STORAGE ---
-    
-    // 1. Try LocalStorage (Saved during Submit)
+    // --- HQ Logic ---
     let storedHq = localStorage.getItem('currentSessionHq');
-    
-    // 2. Try DOM (If still visible)
     if (!storedHq && document.getElementById('cliHqDisplay')) {
         storedHq = document.getElementById('cliHqDisplay').value;
     }
-
-    // 3. Normalize
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
-    
-    // Update data payload
     data.cliHq = currentHq;
 
-    // Debugging
-    console.log(`Final HQ for Routing: [${currentHq}]`);
-
-    let targetUrl = primaryAppsScriptUrl;
-
-    // 4. CHECK LOGIC
-    if (ALLOWED_HQS.includes(currentHq)) {
-        console.log(`MATCH: Sending to PRIMARY Sheet.`);
-        targetUrl = primaryAppsScriptUrl;
-    } else {
-        console.log(`NO MATCH: Sending to OTHER DIVISION Sheet.`);
-        targetUrl = otherAppsScriptUrl;
-    }
+    // NOTE: Using SINGLE Script URL now (since we deployed one smart script)
+    // If you want logic to split sheets, handle it inside Code.gs, but for now we send to ONE script.
+    
+    // --- PAYLOAD WRAPPING (CRITICAL FIX) ---
+    const finalPayload = {
+        type: 'data',  // This tells Code.gs to use handleAnalysisData
+        payload: data
+    };
 
     // --- SEND DATA ---
     try {
-        await fetch(targetUrl, {
+        await fetch(SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors', 
+            mode: 'no-cors', // Important for Google Scripts
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(finalPayload) // Sending wrapped payload
         });
 
-        console.log('Data sent successfully.');
+        console.log('Data sent successfully to:', SCRIPT_URL);
 
     } catch (error) {
         console.error('Error sending data to Google Sheet:', error);
@@ -152,16 +137,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 try {
+                    // 1. Send Data to Sheet
                     await sendDataToGoogleSheet(reportData);
                     
+                    // 2. Generate PDF
                     if (typeof generatePDF === 'function') {
                         await generatePDF(); 
                         alert('Data submitted and report generated. Redirecting...');
                         
+                        // 3. Cleanup & Redirect
                         localStorage.removeItem('spmReportData');
-                        localStorage.removeItem('currentSessionHq'); // Clean up HQ
-                        localStorage.removeItem('isOtherCliMode');
-                        localStorage.removeItem('customCliName');
+                        localStorage.removeItem('currentSessionHq');
                         window.location.href = 'index.html'; 
                     } else {
                         alert('PDF function missing.');
