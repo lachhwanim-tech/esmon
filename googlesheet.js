@@ -1,7 +1,7 @@
-// googlesheet.js - Updated for Sanket 2.0 (New ID & Payload Fix)
+// googlesheet.js - Compatible with JSON/Base64 Backend
 
-// REPLACE WITH YOUR NEW SCRIPT URL HERE
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxYhnChVwHi-p7vSegGJjVfsWwFUZcXAyT1l9VqJUgAd4rsZvpEd_nOoZCrgATVvCe/exec';
+// Aapki wahi ID jo aapne confirm ki hai
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxY1rk4kWXqueYg7iBWvz1jIlVfmD_F8gtoC8sXm4VMf8Xsq1ghqhj7zXH58NNhMhW0/exec';
 
 async function sendDataToGoogleSheet(data) {
     // --- ALLOWED HQ LIST ---
@@ -48,26 +48,26 @@ async function sendDataToGoogleSheet(data) {
         });
     }
     
-    // Clean up heavy chart data before sending
+    // Clean up heavy items (Charts images etc)
     delete data.speedChartConfig;
     delete data.stopChartConfig;
     delete data.speedChartImage;
     delete data.stopChartImage;
 
     // --- HQ Logic ---
-    let storedHq = localStorage.getItem('currentSessionHq');
-    if (!storedHq && document.getElementById('cliHqDisplay')) {
-        storedHq = document.getElementById('cliHqDisplay').value;
+    let currentHq = "UNKNOWN";
+    const hqField = document.getElementById('cliHqDisplay');
+    if (hqField && hqField.value) {
+        currentHq = hqField.value.trim().toUpperCase();
+    } else {
+        currentHq = localStorage.getItem('currentSessionHq') || "UNKNOWN";
     }
-    let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
     data.cliHq = currentHq;
 
-    // NOTE: Using SINGLE Script URL now (since we deployed one smart script)
-    // If you want logic to split sheets, handle it inside Code.gs, but for now we send to ONE script.
-    
-    // --- PAYLOAD WRAPPING (CRITICAL FIX) ---
+    // --- PAYLOAD WRAPPING ---
+    // Code.gs ab 'type' check karega (type='data' matlab analysis data)
     const finalPayload = {
-        type: 'data',  // This tells Code.gs to use handleAnalysisData
+        type: 'data',  
         payload: data
     };
 
@@ -75,11 +75,11 @@ async function sendDataToGoogleSheet(data) {
     try {
         await fetch(SCRIPT_URL, {
             method: 'POST',
-            mode: 'no-cors', // Important for Google Scripts
+            mode: 'no-cors',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'text/plain' // Simple text to avoid CORS preflight issues
             },
-            body: JSON.stringify(finalPayload) // Sending wrapped payload
+            body: JSON.stringify(finalPayload)
         });
 
         console.log('Data sent successfully to:', SCRIPT_URL);
