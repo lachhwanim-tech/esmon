@@ -2,10 +2,10 @@
 
 async function sendDataToGoogleSheet(data) {
     // 1. Primary Apps Script URL (Main Sheet - SPM ANALYSIS BANK)
-    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyjtlUblBEvK-IHarOTh77ntNHQjueOCgqKAF0gefWCjYbejj_oVybT-UKhYsUSwu_AHg/exec';
+    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyr-wL3QqRHlQdwuq-v-VF5c9fFlMtygsHlbWxWfpappl-lIQrzYRnpPAplWr8c9hPC/exec';
 
     // 2. Secondary Apps Script URL (Other Sheet - OTHER DIVISION)
-    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyjtlUblBEvK-IHarOTh77ntNHQjueOCgqKAF0gefWCjYbejj_oVybT-UKhYsUSwu_AHg/exec'; 
+    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyr-wL3QqRHlQdwuq-v-VF5c9fFlMtygsHlbWxWfpappl-lIQrzYRnpPAplWr8c9hPC/exec'; 
 
     // --- ALLOWED HQ LIST ---
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DRZ', 'DURG'];
