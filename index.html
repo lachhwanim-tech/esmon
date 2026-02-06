@@ -13,581 +13,89 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
+    
+    <script>
+        window.uploadDataAndFileToGoogle = async function() { 
+            console.warn("Legacy upload function called. Bypass successful."); 
+            return { status: 'skipped' }; 
+        };
+    </script>
+
     <style>
-/* --- 1. CSS Variables for Theming (Day/Night Mode) --- */
-:root {
-    --bg-gradient: linear-gradient(135deg, #0f172a, #1184f8);
-    --text-color: #f8fafc;
-    --text-muted: #cbd5e1;
-    --accent-color: #00aaff;
-    --accent-glow: rgba(0, 170, 255, 0.5);
-    --border-color: rgba(0, 170, 255, 0.3); 
-    --box-bg: rgba(20, 30, 48, 0.85);
-    --input-bg: #111827; 
-    --success-color: #22c55e;
-    --danger-color: #ef4444;
-    --font-main: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-    --h3-highlight-bg: rgba(88, 28, 135, 0.3); 
-    --h4-highlight-bg: rgba(17, 94, 89, 0.4);  
-}
-
-body.day-mode {
-    --bg-gradient: linear-gradient(135deg, #82f9bf, #f8f9fa);
-    --text-color: #0c0c0d;
-    --text-muted: #495057;
-    --accent-color: #0056b3;
-    --accent-glow: rgba(0, 86, 179, 0.3);
-    --border-color: rgba(0, 86, 179, 0.5); 
-    --box-bg: rgb(255, 255, 255);
-    --input-bg: #60caffc1;
-    --success-color: #198754;
-    --danger-color: #dc3545;
-    --h3-highlight-bg: rgba(224, 242, 254, 0.8); 
-    --h4-highlight-bg: rgba(220, 252, 231, 0.8); 
-}
-
-/* --- 2. General Body and Layout Styles --- */
-body {
-    font-family: var(--font-main);
-    background: var(--bg-gradient);
-    color: var(--text-color);
-    margin: 0;
-    padding: 20px;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    min-height: 100vh;
-    transition: background 0.5s, color 0.5s;
-}
-
-.container {
-    width: 100%;
-    max-width: 1200px;
-    background: transparent; 
-    padding: 25px;
-    border-radius: 15px;
-    position: relative;
-}
-
-/* --- 3. Header and Logo --- */
-.logo {
-    display: block;
-    margin: 0 auto 15px auto;
-    width: 300px;
-    height: auto;
-    filter: drop-shadow(0 0 10px var(--accent-glow));
-}
-
-h1 {
-    color: var(--accent-color);
-    text-align: center;
-    font-size: 3rem;
-    font-weight: 700;
-    margin-bottom: 5px;
-    letter-spacing: 2px;
-    text-shadow: 0 0 15px var(--accent-glow);
-}
-
-h3, h4 {
-    text-align: center;
-    color: var(--text-muted);
-    font-weight: 400; 
-    margin: 10px auto 25px auto;
-    padding: 8px 15px;
-    border-radius: 8px;
-    max-width: 80%;
-    line-height: 1.5; 
-    border: 1px solid var(--border-color);
-    transition: background-color 0.5s;
-}
-
-h3 {
-    background-color: var(--h3-highlight-bg);
-}
-
-h4 {
-    background-color: var(--h4-highlight-bg);
-    font-weight: 700; 
-}
-
-h2 {
-    color: var(--text-color);
-    border-bottom: 2px solid var(--accent-color);
-    padding-bottom: 8px;
-    font-size: 1.4rem;
-    margin-bottom: 20px;
-}
-
-/* --- 4. Form Sections and Boxes --- */
-.form-row {
-    display: flex;
-    gap: 25px;
-    margin-bottom: 25px;
-}
-
-.form-section {
-    flex: 1;
-}
-
-.box {
-    background: var(--box-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 20px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-    transition: background 0.5s, border 0.5s;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-    color: var(--text-muted);
-    font-size: 0.9rem;
-}
-
-/* --- 5. Inputs, Selects, and Buttons --- */
-input[type="text"],
-input[type="datetime-local"],
-input[type="file"],
-select {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--input-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    color: var(--text-color);
-    font-size: 1rem;
-    box-sizing: border-box;
-    transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
-}
-
-input:focus, select:focus {
-    outline: none;
-    border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px var(--accent-glow);
-}
-
-input[readonly] {
-    background-color: rgba(0,0,0,0.2);
-    cursor: not-allowed;
-}
-
-button[type="submit"] {
-    width: 100%;
-    padding: 15px;
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #fff;
-    background: linear-gradient(45deg, var(--accent-color), var(--success-color));
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    margin-top: 20px;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-button[type="submit"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-}
-
-.manual-entry-btn {
-    padding: 5px 10px;
-    font-size: 0.8rem;
-    cursor: pointer;
-    background-color: var(--danger-color);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-    transition: background-color 0.3s;
-}
-
-.manual-entry-btn:hover {
-    filter: brightness(1.2);
-}
-
-.section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-/* --- 6. Loading Spinner --- */
-.loading-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    backdrop-filter: blur(5px);
-}
-
-/* === High-Tech Train Loader CSS === */
-.train-loader-container {
-    position: relative;
-    width: 250px;
-    height: 250px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.track {
-    position: absolute;
-    width: 200px;
-    height: 200px;
-    border: 5px dashed rgba(255, 255, 255, 0.4);
-    border-radius: 50%;
-}
-
-.train-arm {
-    width: 200px;
-    height: 200px;
-    position: absolute;
-    animation: moveOnTrack 4s linear infinite;
-}
-
-@keyframes moveOnTrack {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.train {
-    position: absolute;
-    top: -15px; 
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: flex-end; 
-    animation: stayUpright 4s linear infinite;
-}
-
-@keyframes stayUpright {
-    from { transform: translateX(-50%) rotate(0deg); }
-    to { transform: translateX(-50%) rotate(-360deg); }
-}
-
-.engine {
-    position: relative;
-    margin-right: 5px;
-}
-
-.engine-body {
-    width: 60px;
-    height: 30px;
-    background: var(--danger-color, #ec0c0c);
-    border-radius: 5px 5px 0 0;
-    position: relative;
-    z-index: 2;
-}
-.engine-body::before, .engine-body::after {
-    content: '';
-    position: absolute;
-    bottom: -5px;
-    width: 12px;
-    height: 12px;
-    background: #555;
-    border: 2px solid #ccc;
-    border-radius: 50%;
-}
-.engine-body::before { left: 8px; }
-.engine-body::after { right: 8px; }
-
-.engine-cabin {
-    position: absolute;
-    width: 30px;
-    height: 25px;
-    background: var(--accent-color, #00aaff);
-    bottom: 30px;
-    right: 0;
-    border-radius: 5px 5px 0 0;
-    border: 2px solid #fff;
-    z-index: 1;
-}
-
-.coach {
-    width: 50px;
-    height: 28px;
-    background: var(--accent-color, #00aaff);
-    border: 2px solid #fff;
-    border-radius: 3px;
-    margin-left: -4px; 
-    position: relative;
-}
-.coach::before, .coach::after {
-    content: '';
-    position: absolute;
-    bottom: -5px;
-    width: 10px;
-    height: 10px;
-    background: #555;
-    border: 2px solid #ccc;
-    border-radius: 50%;
-}
-.coach::before { left: 5px; }
-.coach::after { right: 5px; }
-
-.engine-smoke {
-    position: absolute;
-    top: -30px;
-    left: 10px;
-    display: flex;
-}
-.engine-smoke span {
-    display: block;
-    width: 8px;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.5);
-    border-radius: 50%;
-    margin: 0 2px;
-    animation: smokePuff 1s infinite;
-}
-.engine-smoke span:nth-child(2) { animation-delay: 0.2s; }
-.engine-smoke span:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes smokePuff {
-    0% { transform: translateY(0) scale(1); opacity: 1; }
-    100% { transform: translateY(-20px) scale(2); opacity: 0; }
-}
-
-/* --- 7. Day/Night Toggle Switch --- */
-.top-right-nav-link {
-    color: var(--accent-color);
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 0.9rem;
-    margin-right: 15px; 
-    transition: color 0.3s;
-}
-.top-right-nav-link:hover {
-    color: var(--text-color);
-    text-decoration: underline;
-}
-
-.theme-switch-wrapper {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    display: flex;
-    align-items: center;
-}
-.theme-switch {
-    display: inline-block;
-    height: 34px;
-    position: relative;
-    width: 60px;
-}
-.theme-switch input {
-    display:none;
-}
-.slider {
-    background-color: #3c4a5f;
-    bottom: 0;
-    cursor: pointer;
-    left: 0;
-    position: absolute;
-    right: 0;
-    top: 0;
-    transition: .4s;
-    border-radius: 34px;
-}
-.slider:before {
-    background-color: #fff;
-    bottom: 4px;
-    content: "☀️";
-    height: 26px;
-    left: 4px;
-    position: absolute;
-    transition: .4s;
-    width: 26px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-}
-input:checked + .slider {
-    background-color: var(--accent-color);
-}
-input:checked + .slider:before {
-    transform: translateX(26px);
-    content: "🌙";
-}
-
-.manual-link {
-    display: block;
-    text-align: center;
-    margin-bottom: 15px;
-    font-size: 1.1rem;
-    color: var(--accent-color); 
-    text-decoration: none;
-    font-weight: bold;
-}
-.manual-link:hover {
-    text-decoration: underline;
-}
-
-/* --- About Us Toggle --- */
-.about-us-toggle-container {
-    position: relative;
-    display: flex;
-    justify-content: flex-end; 
-    margin-top: 30px; 
-    padding-right: 10px;
-}
-
-@keyframes pulse-glow {
-    0% { box-shadow: 0 0 5px var(--accent-glow), 0 0 10px var(--accent-glow); }
-    50% { box-shadow: 0 0 20px var(--accent-glow), 0 0 30px var(--accent-glow); }
-    100% { box-shadow: 0 0 5px var(--accent-glow), 0 0 10px var(--accent-glow); }
-}
-
-.about-us-icon {
-    background: var(--accent-color);
-    color: #fff;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.5rem;
-    font-weight: bold;
-    font-family: 'Georgia', serif; 
-    cursor: pointer;
-    border: 2px solid rgba(255, 255, 255, 0.7);
-    transition: transform 0.3s ease;
-    animation: pulse-glow 3s infinite;
-}
-
-.about-us-icon:hover {
-    transform: scale(1.1);
-    animation-play-state: paused; 
-}
-
-.about-us-modal {
-    position: absolute;
-    bottom: 120%; 
-    right: 0;
-    background: var(--box-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-    z-index: 999;
-    width: 400px;
-    max-width: 90vw;
-    max-height: 75vh;
-    overflow-y: auto;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(10px);
-    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
-}
-
-.about-us-modal.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.about-us-modal h2 {
-    color: var(--accent-color);
-    border-bottom: 2px solid var(--accent-color);
-    padding-bottom: 8px;
-    font-size: 1.3rem;
-    margin-top: 0;
-    margin-bottom: 15px;
-}
-
-.about-us-modal h3 {
-    color: var(--text-muted);
-    font-size: 1rem;
-    font-weight: bold;
-    margin-top: 20px;
-    margin-bottom: 10px;
-    padding: 0;
-    border: none;
-    background: none;
-    text-align: left;
-}
-
-.about-us-modal p, .about-us-modal li {
-    font-size: 0.9rem;
-    line-height: 1.6;
-    color: var(--text-color);
-}
-
-.about-us-modal ul {
-    list-style-type: disc;
-    padding-left: 20px;
-    margin: 0;
-}
-
-.contributor-card {
-    margin-top: 15px;
-    padding-top: 15px;
-    border-top: 1px solid var(--border-color);
-}
-
-.contributor-card h4 {
-    margin: 0 0 5px 0;
-    padding: 0;
-    font-size: 1rem;
-    color: var(--accent-color);
-    background: none;
-    border: none;
-    text-align: left;
-    max-width: 100%;
-}
-
-.contributor-card p {
-    margin: 0;
-}
-
-/* --- 8. Toast Notification Styles --- */
-#toast-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 2000; 
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.toast-message {
-    background: var(--box-bg);
-    color: var(--text-color);
-    padding: 15px 20px;
-    border-radius: 8px;
-    border-left: 5px solid var(--accent-color);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    opacity: 0;
-    transform: translateX(100%);
-    transition: all 0.5s ease-in-out;
-    font-size: 1rem;
-    font-weight: 600;
-}
-
-.toast-message.show {
-    opacity: 1;
-    transform: translateX(0);
-}
+        /* --- CSS STYLES --- */
+        :root { --bg-gradient: linear-gradient(135deg, #0f172a, #1184f8); --text-color: #f8fafc; --text-muted: #cbd5e1; --accent-color: #00aaff; --accent-glow: rgba(0, 170, 255, 0.5); --border-color: rgba(0, 170, 255, 0.3); --box-bg: rgba(20, 30, 48, 0.85); --input-bg: #111827; --success-color: #22c55e; --danger-color: #ef4444; --font-main: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif; --h3-highlight-bg: rgba(88, 28, 135, 0.3); --h4-highlight-bg: rgba(17, 94, 89, 0.4); }
+        body.day-mode { --bg-gradient: linear-gradient(135deg, #82f9bf, #f8f9fa); --text-color: #0c0c0d; --text-muted: #495057; --accent-color: #0056b3; --accent-glow: rgba(0, 86, 179, 0.3); --border-color: rgba(0, 86, 179, 0.5); --box-bg: rgb(255, 255, 255); --input-bg: #60caffc1; --success-color: #198754; --danger-color: #dc3545; --h3-highlight-bg: rgba(224, 242, 254, 0.8); --h4-highlight-bg: rgba(220, 252, 231, 0.8); }
+        body { font-family: var(--font-main); background: var(--bg-gradient); color: var(--text-color); margin: 0; padding: 20px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; transition: background 0.5s, color 0.5s; }
+        .container { width: 100%; max-width: 1200px; background: transparent; padding: 25px; border-radius: 15px; position: relative; }
+        .logo { display: block; margin: 0 auto 15px auto; width: 300px; height: auto; filter: drop-shadow(0 0 10px var(--accent-glow)); }
+        h1 { color: var(--accent-color); text-align: center; font-size: 3rem; font-weight: 700; margin-bottom: 5px; letter-spacing: 2px; text-shadow: 0 0 15px var(--accent-glow); }
+        h3, h4 { text-align: center; color: var(--text-muted); font-weight: 400; margin: 10px auto 25px auto; padding: 8px 15px; border-radius: 8px; max-width: 80%; line-height: 1.5; border: 1px solid var(--border-color); transition: background-color 0.5s; }
+        h3 { background-color: var(--h3-highlight-bg); }
+        h4 { background-color: var(--h4-highlight-bg); font-weight: 700; }
+        h2 { color: var(--text-color); border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; font-size: 1.4rem; margin-bottom: 20px; }
+        .form-row { display: flex; gap: 25px; margin-bottom: 25px; }
+        .form-section { flex: 1; }
+        .box { background: var(--box-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); transition: background 0.5s, border 0.5s; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted); font-size: 0.9rem; }
+        input[type="text"], input[type="datetime-local"], input[type="file"], select { width: 100%; padding: 12px; background-color: var(--input-bg); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-color); font-size: 1rem; box-sizing: border-box; transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s; }
+        input:focus, select:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px var(--accent-glow); }
+        input[readonly] { background-color: rgba(0,0,0,0.2); cursor: not-allowed; }
+        button[type="submit"] { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; color: #fff; background: linear-gradient(45deg, var(--accent-color), var(--success-color)); border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; transition: transform 0.2s, box-shadow 0.2s; }
+        button[type="submit"]:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2); }
+        .manual-entry-btn { padding: 5px 10px; font-size: 0.8rem; cursor: pointer; background-color: var(--danger-color); color: white; border: none; border-radius: 4px; font-weight: bold; transition: background-color 0.3s; }
+        .manual-entry-btn:hover { filter: brightness(1.2); }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(5px); }
+        /* Train Loader */
+        .train-loader-container { position: relative; width: 250px; height: 250px; display: flex; justify-content: center; align-items: center; }
+        .track { position: absolute; width: 200px; height: 200px; border: 5px dashed rgba(255, 255, 255, 0.4); border-radius: 50%; }
+        .train-arm { width: 200px; height: 200px; position: absolute; animation: moveOnTrack 4s linear infinite; }
+        @keyframes moveOnTrack { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .train { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); display: flex; align-items: flex-end; animation: stayUpright 4s linear infinite; }
+        @keyframes stayUpright { from { transform: translateX(-50%) rotate(0deg); } to { transform: translateX(-50%) rotate(-360deg); } }
+        .engine { position: relative; margin-right: 5px; }
+        .engine-body { width: 60px; height: 30px; background: var(--danger-color, #ec0c0c); border-radius: 5px 5px 0 0; position: relative; z-index: 2; }
+        .engine-body::before, .engine-body::after { content: ''; position: absolute; bottom: -5px; width: 12px; height: 12px; background: #555; border: 2px solid #ccc; border-radius: 50%; }
+        .engine-body::before { left: 8px; } .engine-body::after { right: 8px; }
+        .engine-cabin { position: absolute; width: 30px; height: 25px; background: var(--accent-color, #00aaff); bottom: 30px; right: 0; border-radius: 5px 5px 0 0; border: 2px solid #fff; z-index: 1; }
+        .coach { width: 50px; height: 28px; background: var(--accent-color, #00aaff); border: 2px solid #fff; border-radius: 3px; margin-left: -4px; position: relative; }
+        .coach::before, .coach::after { content: ''; position: absolute; bottom: -5px; width: 10px; height: 10px; background: #555; border: 2px solid #ccc; border-radius: 50%; }
+        .coach::before { left: 5px; } .coach::after { right: 5px; }
+        .engine-smoke { position: absolute; top: -30px; left: 10px; display: flex; }
+        .engine-smoke span { display: block; width: 8px; height: 8px; background: rgba(255, 255, 255, 0.5); border-radius: 50%; margin: 0 2px; animation: smokePuff 1s infinite; }
+        .engine-smoke span:nth-child(2) { animation-delay: 0.2s; } .engine-smoke span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes smokePuff { 0% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-20px) scale(2); opacity: 0; } }
+        /* Theme Switch */
+        .top-right-nav-link { color: var(--accent-color); text-decoration: none; font-weight: bold; font-size: 0.9rem; margin-right: 15px; transition: color 0.3s; }
+        .top-right-nav-link:hover { color: var(--text-color); text-decoration: underline; }
+        .theme-switch-wrapper { position: absolute; top: 20px; right: 20px; display: flex; align-items: center; }
+        .theme-switch { display: inline-block; height: 34px; position: relative; width: 60px; }
+        .theme-switch input { display:none; }
+        .slider { background-color: #3c4a5f; bottom: 0; cursor: pointer; left: 0; position: absolute; right: 0; top: 0; transition: .4s; border-radius: 34px; }
+        .slider:before { background-color: #fff; bottom: 4px; content: "☀️"; height: 26px; left: 4px; position: absolute; transition: .4s; width: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        input:checked + .slider { background-color: var(--accent-color); }
+        input:checked + .slider:before { transform: translateX(26px); content: "🌙"; }
+        .manual-link { display: block; text-align: center; margin-bottom: 15px; font-size: 1.1rem; color: var(--accent-color); text-decoration: none; font-weight: bold; }
+        .manual-link:hover { text-decoration: underline; }
+        /* About Us */
+        .about-us-toggle-container { position: relative; display: flex; justify-content: flex-end; margin-top: 30px; padding-right: 10px; }
+        @keyframes pulse-glow { 0% { box-shadow: 0 0 5px var(--accent-glow), 0 0 10px var(--accent-glow); } 50% { box-shadow: 0 0 20px var(--accent-glow), 0 0 30px var(--accent-glow); } 100% { box-shadow: 0 0 5px var(--accent-glow), 0 0 10px var(--accent-glow); } }
+        .about-us-icon { background: var(--accent-color); color: #fff; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; font-weight: bold; font-family: 'Georgia', serif; cursor: pointer; border: 2px solid rgba(255, 255, 255, 0.7); transition: transform 0.3s ease; animation: pulse-glow 3s infinite; }
+        .about-us-icon:hover { transform: scale(1.1); animation-play-state: paused; }
+        .about-us-modal { position: absolute; bottom: 120%; right: 0; background: var(--box-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); z-index: 999; width: 400px; max-width: 90vw; max-height: 75vh; overflow-y: auto; opacity: 0; visibility: hidden; transform: translateY(10px); transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s; }
+        .about-us-modal.show { opacity: 1; visibility: visible; transform: translateY(0); }
+        .about-us-modal h2 { color: var(--accent-color); border-bottom: 2px solid var(--accent-color); padding-bottom: 8px; font-size: 1.3rem; margin-top: 0; margin-bottom: 15px; }
+        .about-us-modal h3 { color: var(--text-muted); font-size: 1rem; font-weight: bold; margin-top: 20px; margin-bottom: 10px; padding: 0; border: none; background: none; text-align: left; }
+        .about-us-modal p, .about-us-modal li { font-size: 0.9rem; line-height: 1.6; color: var(--text-color); }
+        .about-us-modal ul { list-style-type: disc; padding-left: 20px; margin: 0; }
+        .contributor-card { margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); }
+        .contributor-card h4 { margin: 0 0 5px 0; padding: 0; font-size: 1rem; color: var(--accent-color); background: none; border: none; text-align: left; max-width: 100%; }
+        .contributor-card p { margin: 0; }
+        /* Toast */
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
+        .toast-message { background: var(--box-bg); color: var(--text-color); padding: 15px 20px; border-radius: 8px; border-left: 5px solid var(--accent-color); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); opacity: 0; transform: translateX(100%); transition: all 0.5s ease-in-out; font-size: 1rem; font-weight: 600; }
+        .toast-message.show { opacity: 1; transform: translateX(0); }
     </style>
 </head>
 <body>
@@ -595,25 +103,17 @@ input:checked + .slider:before {
         <img src="railway logo.png" alt="Railway Logo" class="logo">
         <div class="theme-switch-wrapper">
             <label class="theme-switch" for="checkbox">
-                <a href="graph.html" target="_blank" class="top-right-nav-link">
-            Signal Wise Analysis
-        </a>
-        <label class="theme-switch" for="checkbox">
-            <input type="checkbox" id="checkbox" />
-            <div class="slider round"></div>
-        </label>
-    </div>
+                <a href="graph.html" target="_blank" class="top-right-nav-link">Signal Wise Analysis</a>
+                <label class="theme-switch" for="checkbox">
+                    <input type="checkbox" id="checkbox" />
+                    <div class="slider round"></div>
+                </label>
+            </label>
+        </div>
         <h1>SANKET</h1>
-        <a href="manual.html" target="_blank" class="manual-link">
-            Need Help? View the User Manual
-          </a>
+        <a href="manual.html" target="_blank" class="manual-link">Need Help? View the User Manual</a>
         <h3>(SPM Analysis and Navigation KPA Extraction Tool)</h3>
-        
-        <h4>
-            (Designed and Developed by Electrical(OP) Bilaspur S.E.C.Railway)
-            <br>
-            (इलेक्ट्रिकल (ओपी), बिलासपुर, द.पू.म. रेलवे द्वारा)
-        </h4>
+        <h4>(Designed and Developed by Electrical(OP) Bilaspur S.E.C.Railway)<br>(इलेक्ट्रिकल (ओपी), बिलासपुर, द.पू.म. रेलवे द्वारा)</h4>
         
         <form id="spmForm">
             <div class="form-row">
@@ -623,65 +123,34 @@ input:checked + .slider:before {
                         <button type="button" id="manualLpBtn" class="manual-entry-btn">MANNUAL ENTRY MODE</button>
                     </div>
                     <div class="box">
-                        <div class="form-group">
-                            <label for="lpId">LP ID</label>
-                            <input type="text" id="lpId" name="lpId" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="lpName">LP Name</label>
-                            <input type="text" id="lpName" name="lpName" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="lpDesg">LP Designation</label>
-                            <input type="text" id="lpDesg" name="lpDesg" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="lpGroupCli">LP Group CLI</label>
-                            <input type="text" id="lpGroupCli" name="lpGroupCli" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="lpCugNumber">LP CUG Number</label>
-                            <input type="text" id="lpCugNumber" name="lpCugNumber" readonly>
+                        <div class="form-group"><label for="lpId">LP ID</label><input type="text" id="lpId" name="lpId" required></div>
+                        <div class="form-group"><label for="lpName">LP Name</label><input type="text" id="lpName" name="lpName" readonly></div>
+                        <div class="form-group"><label for="lpDesg">LP Designation</label><input type="text" id="lpDesg" name="lpDesg" readonly></div>
+                        <div class="form-group"><label for="lpGroupCli">LP Group CLI</label><input type="text" id="lpGroupCli" name="lpGroupCli" readonly></div>
+                        <div class="form-group"><label for="lpCugNumber">LP CUG Number</label><input type="text" id="lpCugNumber" name="lpCugNumber" readonly></div>
+                    </div>
+                    <div id="lp-abnormalities-section" style="margin-top: 20px;">
+                        <h2>Last 10 abnormalities with Action Taken</h2>
+                        <div class="box" id="lp-abnormalities-list-container">
+                            <p id="lp-abnormalities-list">Enter LP ID to view previous records.</p>
                         </div>
                     </div>
-
-                    <div id="lp-abnormalities-section" style="margin-top: 20px;">
-    <h2>Last 10 abnormalities with Action Taken</h2>
-    <div class="box" id="lp-abnormalities-list-container">
-        <p id="lp-abnormalities-list">Enter LP ID to view previous records.</p>
-    </div>
-</div>
-</div>
+                </div>
                 <div class="form-section">
                     <div class="section-header">
                         <h2>ALP DETAILS</h2>
                         <button type="button" id="manualAlpBtn" class="manual-entry-btn">MANNUAL ENTRY MODE</button>
                     </div>
                     <div class="box">
-                        <div class="form-group">
-                            <label for="alpId">ALP ID</label>
-                            <input type="text" id="alpId" name="alpId" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="alpName">ALP Name</label>
-                            <input type="text" id="alpName" name="alpName" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="alpDesg">ALP Designation</label>
-                            <input type="text" id="alpDesg" name="alpDesg" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="alpGroupCli">ALP Group CLI</label>
-                            <input type="text" id="alpGroupCli" name="alpGroupCli" readonly>
-                        </div>
-                        <div class="form-group">
-                            <label for="alpCugNumber">ALP CUG Number</label>
-                            <input type="text" id="alpCugNumber" name="alpCugNumber" readonly>
-                        </div>
+                        <div class="form-group"><label for="alpId">ALP ID</label><input type="text" id="alpId" name="alpId" required></div>
+                        <div class="form-group"><label for="alpName">ALP Name</label><input type="text" id="alpName" name="alpName" readonly></div>
+                        <div class="form-group"><label for="alpDesg">ALP Designation</label><input type="text" id="alpDesg" name="alpDesg" readonly></div>
+                        <div class="form-group"><label for="alpGroupCli">ALP Group CLI</label><input type="text" id="alpGroupCli" name="alpGroupCli" readonly></div>
+                        <div class="form-group"><label for="alpCugNumber">ALP CUG Number</label><input type="text" id="alpCugNumber" name="alpCugNumber" readonly></div>
                     </div>
-                      <div id="lp-abnormality-summary-section" style="margin-top: 20px;">
+                    <div id="lp-abnormality-summary-section" style="margin-top: 20px;">
                         <h2>Historical Abnormality Profile</h2>
-                         <div class="box" id="lp-abnormality-summary-container">
+                        <div class="box" id="lp-abnormality-summary-container">
                             <ul id="lp-abnormality-summary-list" style="list-style: none; padding: 0; margin: 0; font-size: 0.9rem;">
                                 <li style="margin-bottom: 5px;">BFT not done: <strong id="bft-not-done-count">0</strong></li>
                                 <li style="margin-bottom: 5px;">BPT not done: <strong id="bpt-not-done-count">0</strong></li>
@@ -691,7 +160,7 @@ input:checked + .slider:before {
                                 <li style="margin-bottom: 5px;">Overspeeding: <strong id="overspeeding-count">0</strong></li>
                                 <li style="margin-bottom: 5px;">Others Abnormalities: <strong id="others-abnormalities-count">0</strong></li>
                             </ul>
-                             <p id="lp-abnormality-summary-message" style="margin-top: 10px; font-style: italic;"></p>
+                            <p id="lp-abnormality-summary-message" style="margin-top: 10px; font-style: italic;"></p>
                         </div>
                     </div>
                 </div>
@@ -700,14 +169,8 @@ input:checked + .slider:before {
                 <div class="form-section">
                     <h2>TRAIN DETAILS</h2>
                     <div class="box">
-                        <div class="form-group">
-                            <label for="locoNumber">Loco Number</label>
-                            <input type="text" id="locoNumber" name="locoNumber" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="trainNumber">Train Number</label>
-                            <input type="text" id="trainNumber" name="trainNumber" required>
-                        </div>
+                        <div class="form-group"><label for="locoNumber">Loco Number</label><input type="text" id="locoNumber" name="locoNumber" required></div>
+                        <div class="form-group"><label for="trainNumber">Train Number</label><input type="text" id="trainNumber" name="trainNumber" required></div>
                         <div class="form-group">
                             <label for="rakeType">Type of Rake</label>
                             <select id="rakeType" name="rakeType" required>
@@ -748,24 +211,9 @@ input:checked + .slider:before {
                 <div class="form-section">
                     <h2>SECTION DETAILS</h2>
                     <div class="box">
-                        <div class="form-group">
-                            <label for="section">Section</label>
-                            <select id="section" name="section" required>
-                                <option value="" disabled selected>Select Section</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="fromSection">From Section</label>
-                            <select id="fromSection" name="fromSection" required>
-                                <option value="" disabled selected>Select From Station</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="toSection">To Section</label>
-                            <select id="toSection" name="toSection" required>
-                                <option value="" disabled selected>Select To Station</option>
-                            </select>
-                        </div>
+                        <div class="form-group"><label for="section">Section</label><select id="section" name="section" required><option value="" disabled selected>Select Section</option></select></div>
+                        <div class="form-group"><label for="fromSection">From Section</label><select id="fromSection" name="fromSection" required><option value="" disabled selected>Select From Station</option></select></div>
+                        <div class="form-group"><label for="toSection">To Section</label><select id="toSection" name="toSection" required><option value="" disabled selected>Select To Station</option></select></div>
                     </div>
                 </div>
             </div>
@@ -785,375 +233,181 @@ input:checked + .slider:before {
                             <option value="RTIS">RTIS</option>
                         </select>
                     </div>
-                    <div class="form-group">
-    <label for="cliIdInput">CLI ID</label>
-    <input type="text" id="cliIdInput" name="cliIdInput" placeholder="Enter CLI ID" required>
-</div>
-
-<div class="form-group">
-    <label for="cliName">CLI NAME</label>
-    <input type="text" id="cliName" name="cliName" placeholder="Auto-filled" readonly>
-</div>
-
-<div class="form-group">
-    <label for="cliHqDisplay">CLI HQ</label>
-    <input type="text" id="cliHqDisplay" name="cliHqDisplay" placeholder="Auto-filled" readonly>
-</div>                    <div class="form-group">
-                        <label for="fromDateTime">From Date and Time</label>
-                        <input type="datetime-local" id="fromDateTime" name="fromDateTime" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="toDateTime">To Date and Time</label>
-                        <input type="datetime-local" id="toDateTime" name="toDateTime" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="cugFile">Upload CUG.csv File</label>
-                        <input type="file" id="cugFile" name="cugFile" accept=".csv">
-                    </div>
-                    <div class="form-group">
-                        <label for="spmFile">Upload SPM File</label>
-                        <input type="file" id="spmFile" name="spmFile" accept=".xlsx,.xls,.csv,.txt,.pdf" required>
-                    </div>
+                    <div class="form-group"><label for="cliIdInput">CLI ID</label><input type="text" id="cliIdInput" name="cliIdInput" placeholder="Enter CLI ID" required></div>
+                    <div class="form-group"><label for="cliName">CLI NAME</label><input type="text" id="cliName" name="cliName" placeholder="Auto-filled" readonly></div>
+                    <div class="form-group"><label for="cliHqDisplay">CLI HQ</label><input type="text" id="cliHqDisplay" name="cliHqDisplay" placeholder="Auto-filled" readonly></div>
+                    <div class="form-group"><label for="fromDateTime">From Date and Time</label><input type="datetime-local" id="fromDateTime" name="fromDateTime" required></div>
+                    <div class="form-group"><label for="toDateTime">To Date and Time</label><input type="datetime-local" id="toDateTime" name="toDateTime" required></div>
+                    <div class="form-group"><label for="cugFile">Upload CUG.csv File</label><input type="file" id="cugFile" name="cugFile" accept=".csv"></div>
+                    <div class="form-group"><label for="spmFile">Upload SPM File</label><input type="file" id="spmFile" name="spmFile" accept=".xlsx,.xls,.csv,.txt,.pdf" required></div>
                     <button type="submit">ANALYZE THE SPM DATA</button>
                 </div>
             </div>
         </form>
-         <div class="about-us-toggle-container">
-        <div class="about-us-icon" id="aboutUsToggle">i</div>
-       <div class="about-us-modal" id="aboutUsModal">
-    <h2>About SANKET</h2>
-    <p>
-        <b>SANKET</b> (SPM Analysis and Navigation KPA Extraction Tool) is a sophisticated web application engineered to revolutionize the analysis of locomotive data recorder (SPM) files. Spearheaded by the Electrical (OP) department of SECR, Bilaspur, this tool automates the meticulous process of monitoring train operations, evaluating crew performance, and ensuring safety compliance.
-    </p>
-
-    <h3>Key Features</h3>
-    <ul>
-        <li><b>Universal SPM Compatibility:</b> Seamlessly processes data from a wide array of SPM systems, including Laxven, Medha, Telpro, MR, VEL, and RTIS.</li>
-        <li><b>Intelligent Anomaly Detection:</b> Automatically identifies and reports critical operational anomalies like overspeeding, wheel slip, and improper brake application.</li>
-        <li><b>Advanced Data Visualization:</b> Renders complex data into intuitive, interactive charts for clear interpretation of locomotive performance.</li>
-        <li><b>Automated Reporting & Logging:</b> Instantly generates comprehensive PDF reports and logs all findings to a centralized Google Sheet for robust record-keeping and trend analysis.</li>
-    </ul>
-
-    <div class="contributor-card">
-        <h3>The Development Team</h3>
-        
-        <h4>Visionary & Motivational Support</h4>
-        <p><b>Shri Masud Alam, Sr. DEE/OP/BSP</b><br>Provided the essential leadership and encouragement that propelled this project from concept to reality.</p>
-        
-        <h4 style="margin-top:15px;">Technical & Domain Expertise</h4>
-        <p><b>Shri N Ravichandran, CLI/BSP</b><br>Offered invaluable expert guidance on locomotive operations and data interpretation, ensuring the tool's accuracy and relevance.</p>
-        
-        <h4 style="margin-top:15px;">Strategic Guidance & Mentorship</h4>
-        <p><b>Shri Rajeev Soni, ADEE/OP/BSP</b><br>His strategic insights and dedicated mentorship were pivotal in navigating project challenges and shaping the tool's successful development.</p>
-
-        <h4 style="margin-top:15px;">Lead Developer & Architect</h4>
-        <p><b>Shri Mohammad Rustam Khan, Sr. ALP/BSP</b><br>Masterminded the core architecture, coding, and web design, transforming complex requirements into a functional and user-friendly application.</p>
-
-        <h4 style="margin-top:15px;">Data Management & Curation</h4>
-        <p><b>Shri Chandan Shah, Sr. ALP/BSP</b><br><b>Shri Rupesh Kumar Verma, TECH-1/BSP</b><br>Instrumental in arranging, structuring, and validating the vast datasets required for the tool's backend logic.</p>
-    </div>
-</div>
+        <div class="about-us-toggle-container">
+            <div class="about-us-icon" id="aboutUsToggle">i</div>
+            <div class="about-us-modal" id="aboutUsModal">
+                <h2>About SANKET</h2>
+                <p><b>SANKET</b> (SPM Analysis and Navigation KPA Extraction Tool) is a sophisticated web application engineered to revolutionize the analysis of locomotive data recorder (SPM) files.</p>
+                <div class="contributor-card"><h3>The Development Team</h3><h4>Lead Developer & Architect</h4><p><b>Shri Mohammad Rustam Khan, Sr. ALP/BSP</b></p></div>
+            </div>
+        </div>
     </div>
     <canvas id="speedChart" style="display: none;"></canvas>
     <canvas id="stopChart" style="display: none;"></canvas>
     <div class="loading-overlay" id="loadingOverlay">
-        <div class="train-loader-container">
-            <div class="track"></div>
-            <div class="train-arm">
-                <div class="train">
-                    <div class="engine">
-                        <div class="engine-body"></div>
-                        <div class="engine-cabin"></div>
-                        <div class="engine-smoke">
-                            <span></span><span></span><span></span>
-                        </div>
-                    </div>
-                    <div class="coach"></div>
-                    <div class="coach"></div>
-                </div>
-            </div>
-        </div>
+        <div class="train-loader-container"><div class="track"></div><div class="train-arm"><div class="train"><div class="engine"><div class="engine-body"></div><div class="engine-cabin"></div><div class="engine-smoke"><span></span><span></span><span></span></div></div><div class="coach"></div><div class="coach"></div></div></div></div>
     </div>
-    
+
 <script>
-    // --- 1. GLOBAL VARIABLES & UTILS ---
-    window.toggleLoadingOverlay = function(show) {
-        document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
-    };
+    // --- 1. UTILS ---
+    window.toggleLoadingOverlay = function(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; };
+    let crewData = []; let stationSignalData = []; let cliDataMap = {}; let currentScript = null; 
 
-    let crewData = [];
-    let stationSignalData = [];
-    let cliDataMap = {}; 
-    let currentScript = null; 
-
-    // --- 2. DYNAMIC SCRIPT LOADER ---
+    // --- 2. SCRIPT LOADER ---
     function loadScript(src, callback) {
         const existingScript = document.querySelector('script[data-spm-script]');
         if (existingScript) existingScript.remove();
-        
         const script = document.createElement('script');
-        script.src = src;
-        script.async = true;
-        script.dataset.spmScript = true;
-        
-        script.onload = () => {
-            console.log(`${src} loaded successfully`);
-            currentScript = src; 
-            if (callback) callback();
-        };
-        
-        script.onerror = () => {
-            alert(`Failed to load script: ${src}. Check internet or file path.`);
-            window.toggleLoadingOverlay(false);
-            currentScript = null;
-        };
+        script.src = src; script.async = true; script.dataset.spmScript = true;
+        script.onload = () => { console.log(`${src} loaded`); currentScript = src; if (callback) callback(); };
+        script.onerror = () => { alert(`Failed to load script: ${src}`); window.toggleLoadingOverlay(false); currentScript = null; };
         document.body.appendChild(script);
     }
 
     // --- 3. CSV FETCHER ---
     const fetchCSV = async (filePath) => {
         try {
-            const response = await fetch(filePath);
-            if (!response.ok) throw new Error(`Failed to fetch ${filePath}`);
+            const response = await fetch(filePath); if (!response.ok) throw new Error(`Fetch failed: ${filePath}`);
             const text = await response.text();
-            return new Promise((resolve) => {
-                Papa.parse(text, {
-                    header: true,
-                    skipEmptyLines: true,
-                    transform: (value) => value.trim(),
-                    complete: (result) => resolve(result.data),
-                });
-            });
-        } catch (error) {
-            console.error(`Error loading ${filePath}:`, error);
-            throw error;
-        }
+            return new Promise(resolve => Papa.parse(text, { header: true, skipEmptyLines: true, transform: v => v.trim(), complete: res => resolve(res.data) }));
+        } catch (error) { console.error(error); throw error; }
     };
 
-    // --- 4. INITIAL DATA LOADING ---
+    // --- 4. INIT ---
     document.addEventListener('DOMContentLoaded', async () => {
-        // Theme Logic
+        // Theme
         const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
         const currentTheme = localStorage.getItem('theme');
-        if (currentTheme) {
-            document.body.classList.add(currentTheme);
-            toggleSwitch.checked = (currentTheme === 'night-mode');
-        } else {
-            document.body.classList.add('day-mode');
-        }
+        if (currentTheme) { document.body.classList.add(currentTheme); toggleSwitch.checked = (currentTheme === 'night-mode'); }
+        else { document.body.classList.add('day-mode'); }
         toggleSwitch.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                document.body.classList.remove('day-mode');
-                localStorage.setItem('theme', 'night-mode');
-            } else {
-                document.body.classList.add('day-mode');
-                localStorage.setItem('theme', 'day-mode');
-            }
+            if (e.target.checked) { document.body.classList.remove('day-mode'); localStorage.setItem('theme', 'night-mode'); }
+            else { document.body.classList.add('day-mode'); localStorage.setItem('theme', 'day-mode'); }
         });
 
-        // Load Data
         try {
-            // Load CLIMICRO
             fetch('CLIMICRO.csv').then(r => r.ok ? r.text() : '').then(text => {
                 text.split('\n').forEach(line => {
                     const parts = line.split(',');
                     if (parts.length >= 3) cliDataMap[parts[0].trim().toUpperCase()] = { name: parts[1].trim(), hq: parts[2].trim() };
                 });
-            }).catch(e => console.log("CLI Data error", e));
-
-            // Load Crew & Stations
+            });
             crewData = await fetchCrewDataFromGoogleSheet(); 
             stationSignalData = await fetchCSV('Station_Signal_Interdistant.csv');
             
-            // Populate Sections
             const sectionSelect = document.getElementById('section');
-            [...new Set(stationSignalData.map(r => r['SECTION']))].forEach(sec => {
-                const opt = document.createElement('option');
-                opt.value = opt.textContent = sec;
-                sectionSelect.appendChild(opt);
-            });
-
-            // Section Change Listener
-            const fromSelect = document.getElementById('fromSection');
-            const toSelect = document.getElementById('toSection');
+            [...new Set(stationSignalData.map(r => r['SECTION']))].forEach(sec => sectionSelect.add(new Option(sec, sec)));
             sectionSelect.addEventListener('change', (e) => {
-                fromSelect.innerHTML = '<option value="" disabled selected>Select From Station</option>';
-                toSelect.innerHTML = '<option value="" disabled selected>Select To Station</option>';
-                const stations = [...new Set(stationSignalData.filter(r => r['SECTION'] === e.target.value).map(r => r['STATION']))];
-                stations.forEach(stn => {
-                    fromSelect.add(new Option(stn, stn));
-                    toSelect.add(new Option(stn, stn));
-                });
+                const fromSelect = document.getElementById('fromSection'); const toSelect = document.getElementById('toSection');
+                fromSelect.innerHTML = '<option value="" disabled selected>Select From Station</option>'; toSelect.innerHTML = '<option value="" disabled selected>Select To Station</option>';
+                [...new Set(stationSignalData.filter(r => r['SECTION'] === e.target.value).map(r => r['STATION']))].forEach(stn => { fromSelect.add(new Option(stn, stn)); toSelect.add(new Option(stn, stn)); });
             });
-
-        } catch (error) {
-            console.error("Init Error:", error);
-        }
+        } catch (error) { console.error("Init Error:", error); }
     });
 
-    // --- 5. CREW DATA & INPUT HANDLERS ---
+    // --- 5. GOOGLE SHEET CREW DATA ---
     async function fetchCrewDataFromGoogleSheet() {
         const SPREADSHEET_ID = '1DdaSSzVsuWWczgZ_VvT3YDwyanBr94WOlveBLJ2Hu90'; 
-        const SHEET_NAME = 'Sheet1';
         const API_KEY = 'AIzaSyChXMJaTllbk8kg5w1bjM06PbbJO5MBeLo'; 
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}?key=${API_KEY}`;
-
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/Sheet1?key=${API_KEY}`;
         try {
-            const response = await fetch(url);
-            if (!response.ok) return [];
-            const data = await response.json();
-            const rows = data.values;
-            if (!rows || rows.length === 0) return [];
-
-            const headers = rows[0].map(h => h.trim().toUpperCase());
-            const crewList = [];
-            for (let i = 1; i < rows.length; i++) {
-                const row = rows[i];
-                if (row.length === 0) continue;
-                const crewObj = {};
-                headers.forEach((header, index) => {
-                    crewObj[header] = row[index] ? row[index].trim() : '';
-                });
-                crewList.push(crewObj);
-            }
-            return crewList;
-        } catch (error) {
-            console.error('Error fetching Crew Data:', error);
-            return [];
-        }
+            const res = await fetch(url); if (!res.ok) return []; const data = await res.json();
+            if (!data.values || !data.values.length) return [];
+            const headers = data.values[0].map(h => h.trim().toUpperCase());
+            return data.values.slice(1).map(row => {
+                const obj = {}; headers.forEach((h, i) => obj[h] = row[i] ? row[i].trim() : ''); return obj;
+            });
+        } catch (error) { console.error(error); return []; }
     }
 
-    // LP/ALP Auto-fill & Fetch History
-    async function fetchLpAbnormalities(lpId) {
-        const cont = document.getElementById('lp-abnormalities-list');
-        const sumList = document.getElementById('lp-abnormality-summary-list');
-        
-        // Reset counts
-        ['bft-not-done-count','bpt-not-done-count','bft-rule-count','bpt-rule-count','late-controlling-count','overspeeding-count','others-abnormalities-count'].forEach(id => document.getElementById(id).textContent = '0');
-
-        if(!lpId) { 
-            cont.innerHTML = 'Enter LP ID'; 
-            sumList.style.display='none'; 
-            return; 
-        }
-        
-        cont.innerHTML = 'Loading...';
-        // Note: This fetches from your DB sheet to show previous history
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/1Pw0Ai-2G64pFMeQUZegjglySt_lD6qde4EiRTkDOLEs/values/Sheet1?key=AIzaSyChXMJaTllbk8kg5w1bjM06PbbJO5MBeLo`;
-        
-        try {
-            const res = await fetch(url);
-            const d = await res.json();
-            const rows = d.values || [];
-            let found = false;
-            let list = [];
-            
-            // New structure: LP ID is column L (index 11). 
-            // Abnormality Flags are Z-AG (25-32)
-            // We want to show "Date" (0), "CLI Obs" (23/X) or reconstructed string.
-            // Since we moved to flags, reconstructing text is harder, but we can show "CLI Observation".
-            
-            for(let i=1; i<rows.length; i++) {
-                if(rows[i][11] === lpId) { // Index 11 = Column L (LP ID)
-                    found = true;
-                    // Using "CLI Observation" (Col X / Index 23) as the main summary for now
-                    let obs = rows[i][23] || "Record Found"; 
-                    let act = rows[i][24] || "NIL"; // Col Y / Index 24 = Action Taken
-                    let date = rows[i][0];
-                    list.push({abn: obs, act: act, date: date});
-                }
-            }
-            if(!found) {
-                cont.innerHTML = '<span style="font-weight: bold; color: var(--accent-color);">No prior analysis records found for this crew.</span>';
-                sumList.style.display = 'none';
-            } else {
-                let html = '<ol style="padding-left: 20px; margin: 0; font-size: 0.85rem; line-height: 1.6;">';
-                list.slice(-10).reverse().forEach(item => {
-                    html += `<li style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
-                        <div><strong style="color: var(--danger-color);">Obs:</strong> (${item.date}): ${item.abn}</div>
-                        <div><strong style="color: var(--accent-color);">Action:</strong> ${item.act}</div>
-                    </li>`;
-                });
-                html += '</ol>';
-                cont.innerHTML = html;
-                sumList.style.display = 'block';
-            }
-        } catch(e) { cont.innerHTML = 'Error fetching history.'; }
-    }
-
-    // Input Listeners
+    // --- 6. HANDLERS ---
     ['lpId', 'alpId'].forEach(id => {
         document.getElementById(id).addEventListener('input', (e) => {
             e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
             const rec = crewData.find(r => r['CREWID'] === e.target.value);
             const p = id === 'lpId' ? 'lp' : 'alp';
             if(rec) {
-                document.getElementById(`${p}Name`).value = rec['CREW NAME'];
-                document.getElementById(`${p}Desg`).value = rec['DESG'];
-                document.getElementById(`${p}GroupCli`).value = rec['CLI NAME'];
-                document.getElementById(`${p}CugNumber`).value = rec['CUG NUMBER'];
-                if(id === 'lpId') fetchLpAbnormalities(e.target.value);
+                document.getElementById(`${p}Name`).value = rec['CREW NAME']; document.getElementById(`${p}Desg`).value = rec['DESG'];
+                document.getElementById(`${p}GroupCli`).value = rec['CLI NAME']; document.getElementById(`${p}CugNumber`).value = rec['CUG NUMBER'];
+                if(id === 'lpId') fetchLpHistory(e.target.value);
             }
         });
     });
 
-    // CLI ID Logic
-    const cliInput = document.getElementById('cliIdInput');
-    if(cliInput) {
-        cliInput.addEventListener('input', (e) => {
-            const val = e.target.value.toUpperCase();
-            e.target.value = val;
-            if(cliDataMap[val]) {
-                document.getElementById('cliName').value = cliDataMap[val].name;
-                document.getElementById('cliHqDisplay').value = cliDataMap[val].hq;
+    // Simple History Fetcher (Logs to console if data is missing for now, UI updated to show new system message)
+    async function fetchLpHistory(lpId) {
+        const cont = document.getElementById('lp-abnormalities-list');
+        const sumList = document.getElementById('lp-abnormality-summary-list');
+        if(!lpId) { cont.innerHTML = 'Enter LP ID'; sumList.style.display='none'; return; }
+        
+        // This connects to your NEW DB Sheet for history
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/1Pw0Ai-2G64pFMeQUZegjglySt_lD6qde4EiRTkDOLEs/values/Sheet1?key=AIzaSyChXMJaTllbk8kg5w1bjM06PbbJO5MBeLo`;
+        cont.innerHTML = 'Checking records...';
+        
+        try {
+            const res = await fetch(url); const d = await res.json();
+            let found = false; let list = [];
+            // LP ID is at index 11 (Column L) in new structure
+            if(d.values){
+                for(let i=1; i<d.values.length; i++) {
+                    if(d.values[i][11] === lpId) {
+                        found = true;
+                        list.push({ date: d.values[i][0], obs: d.values[i][23], act: d.values[i][24] });
+                    }
+                }
             }
-        });
+            if(!found) { cont.innerHTML = 'No prior records.'; sumList.style.display = 'none'; }
+            else {
+                cont.innerHTML = list.slice(-10).reverse().map(i => `<li><b>${i.date}</b>: ${i.obs}<br>Action: ${i.act}</li>`).join('');
+                sumList.style.display = 'block';
+            }
+        } catch(e) { cont.innerHTML = 'History unavailable.'; }
     }
 
-    // Manual Entry Buttons
+    document.getElementById('cliIdInput').addEventListener('input', (e) => {
+        const val = e.target.value.toUpperCase(); e.target.value = val;
+        if(cliDataMap[val]) { document.getElementById('cliName').value = cliDataMap[val].name; document.getElementById('cliHqDisplay').value = cliDataMap[val].hq; }
+    });
+
     document.getElementById('manualLpBtn').onclick = () => ['lpName','lpDesg','lpGroupCli','lpCugNumber'].forEach(id => document.getElementById(id).readOnly = false);
     document.getElementById('manualAlpBtn').onclick = () => ['alpName','alpDesg','alpGroupCli','alpCugNumber'].forEach(id => document.getElementById(id).readOnly = false);
 
-    // --- 6. SPM TYPE & FILE HANDLING ---
     document.getElementById('spmType').addEventListener('change', (e) => {
-        const type = e.target.value;
-        const fileInput = document.getElementById('spmFile');
-        
-        if(type === 'Medha') fileInput.accept = '.txt';
-        else if(['MR','VEL'].includes(type)) fileInput.accept = '.pdf';
-        else fileInput.accept = '.xlsx,.xls,.csv';
-
+        const type = e.target.value; const fileInput = document.getElementById('spmFile');
+        if(type === 'Medha') fileInput.accept = '.txt'; else if(['MR','VEL'].includes(type)) fileInput.accept = '.pdf'; else fileInput.accept = '.xlsx,.xls,.csv';
         if(type) loadScript(`${type}.js`);
     });
 
     const parseCugFile = (file) => {
-        return new Promise((resolve) => {
-            Papa.parse(file, {
-                header: true, skipEmptyLines: true, transform: v => v.trim(),
-                complete: (res) => {
-                    const data = res.data.map(c => {
-                        return { ...c, duration: parseInt(c['Duration in Sec'])||0 }; 
-                    }).filter(c => c.duration);
-                    resolve(data);
-                }
-            });
-        });
+        return new Promise(resolve => Papa.parse(file, { header: true, skipEmptyLines: true, transform: v => v.trim(), complete: res => resolve(res.data.map(c => ({...c, duration: parseInt(c['Duration in Sec'])||0})).filter(c=>c.duration)) }));
     };
 
     // --- 7. FINAL SUBMIT HANDLER ---
     document.getElementById('spmForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-
+        
+        // Validation
         if(!document.getElementById('cliIdInput').value) { alert("Enter CLI ID"); return; }
         const spmType = document.getElementById('spmType').value;
         const spmFile = document.getElementById('spmFile').files[0];
         const cugFile = document.getElementById('cugFile').files[0];
-
         if(!spmType) { alert("Select SPM Type"); return; }
         if(!spmFile) { alert("Upload SPM File"); return; }
         if(!currentScript) { alert("Script loading... Please wait."); return; }
 
-        const formData = {
+        // Save Form Data
+        localStorage.setItem('spmFormData', JSON.stringify({
             cliName: document.getElementById('cliName').value,
             journeyDate: document.getElementById('fromDateTime').value,
             fromStation: document.getElementById('fromSection').value,
@@ -1162,8 +416,7 @@ input:checked + .slider:before {
             alpGroupCli: document.getElementById('alpGroupCli').value,
             locoNumber: document.getElementById('locoNumber').value,
             mps: document.getElementById('maxPermissibleSpeed').value
-        };
-        localStorage.setItem('spmFormData', JSON.stringify(formData));
+        }));
         localStorage.setItem('currentSessionHq', document.getElementById('cliHqDisplay').value);
 
         document.getElementById('loadingOverlay').style.display = 'flex';
@@ -1172,36 +425,26 @@ input:checked + .slider:before {
             let cugData = [];
             if(cugFile) cugData = await parseCugFile(cugFile);
 
-            if (typeof analyzeSPMData === 'function') {
-                 await analyzeSPMData(spmFile, cugData);
-            } else if (typeof processLaxvenData === 'function' && spmType === 'Laxven') {
-                 await processLaxvenData(spmFile, cugData);
-            } else if (typeof processMedhaData === 'function' && spmType === 'Medha') {
-                 await processMedhaData(spmFile, cugData);
-            } else if (window.analyzeData) {
-                 await window.analyzeData(spmFile, cugData);
-            } else {
-                 throw new Error("Analysis function not found in loaded script.");
-            }
+            // Execute loaded script
+            if (typeof analyzeSPMData === 'function') { await analyzeSPMData(spmFile, cugData); }
+            else if (typeof processLaxvenData === 'function' && spmType === 'Laxven') { await processLaxvenData(spmFile, cugData); }
+            else if (typeof processMedhaData === 'function' && spmType === 'Medha') { await processMedhaData(spmFile, cugData); }
+            else if (window.analyzeData) { await window.analyzeData(spmFile, cugData); }
+            else { throw new Error("Analysis function not found in loaded script."); }
 
         } catch (error) {
-            console.error(error);
-            alert("Analysis Failed: " + error.message);
+            console.error(error); alert("Analysis Failed: " + error.message);
             document.getElementById('loadingOverlay').style.display = 'none';
         }
     });
 
-    const aboutUsToggle = document.getElementById('aboutUsToggle');
-    const aboutUsModal = document.getElementById('aboutUsModal');
-    if (aboutUsToggle) {
-        aboutUsToggle.addEventListener('click', () => aboutUsModal.classList.toggle('show'));
-        window.addEventListener('click', (event) => {
-            if (!aboutUsModal.contains(event.target) && !aboutUsToggle.contains(event.target)) {
-                aboutUsModal.classList.remove('show');
-            }
-        });
+    // About Us
+    const aboutToggle = document.getElementById('aboutUsToggle'); const aboutModal = document.getElementById('aboutUsModal');
+    if (aboutToggle) {
+        aboutToggle.addEventListener('click', () => aboutModal.classList.toggle('show'));
+        window.addEventListener('click', (e) => { if (!aboutModal.contains(e.target) && !aboutToggle.contains(e.target)) aboutModal.classList.remove('show'); });
     }
 </script>
-    <div id="toast-container"></div>
-    </body>
+<div id="toast-container"></div>
+</body>
 </html>
