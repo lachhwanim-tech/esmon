@@ -475,43 +475,37 @@
                 </table>
             `;
 
-            // Driving Analysis (MODIFIED SECTION)
-        document.getElementById('driving-analysis').innerHTML = `
-              <h2>Driving Analysis</h2>
-    ${reportData.stops?.length > 0 ? `
-        <table class="report-table">
-            <tr>
-                <th>Sr. No.</th><th>Stop Location</th><th>Stop Timing</th><th>Start Timing</th><th>Km</th>
-                <th>1000m</th><th>800m</th><th>500m</th><th>100m</th><th>50m</th>
-                <th>System Generated Analysis</th>
-                <th>CLI Remark</th>
-            </tr>
-            ${reportData.stops.map((stop, index) => `
-                <tr>
-                    <td>${stop.group}</td>
-                    <td>${stop.stopLocation}</td>
-                    <td>${stop.timeString}</td>
-                    <td>${stop.startTiming}</td>
-                    <td>${(stop.kilometer / 1000).toFixed(2)}</td>
-                    <td>${stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'N/A'}</td>
-                    <td>${stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'N/A'}</td>
-                    <td class="system-analysis">
-                        <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
-                            <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
-                            <option value="Late" ${stop.brakingTechnique === 'Late' ? 'selected' : ''}>Late</option>
-                        </select>
-                    </td>
-                    <td>
-                        <input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Enter remark..." style="width: 95%;">
-                    </td>
-                </tr>
-            `).join('')}
-        </table>
-    ` : '<p>No stops found in the selected range.</p>'}
-        `;
+           // Driving Analysis (Updated to 11-Points)
+            document.getElementById('driving-analysis').innerHTML = `
+                <h2>Driving Analysis (11-Point Breaking Analysis)</h2>
+                ${reportData.stops?.length > 0 ? `
+                    <table class="report-table">
+                        <tr>
+                            <th>Sr. No.</th><th>Stop Location</th><th>Stop Timing</th><th>Km</th>
+                            <th style="background:#eef;">2000m</th><th>1000m</th><th>800m</th>
+                            <th style="background:#eef;">600m</th><th>500m</th><th style="background:#eef;">400m</th>
+                            <th style="background:#eef;">300m</th><th>100m</th><th>50m</th>
+                            <th style="background:#eef;">20m</th><th style="background:#eef;">0m</th>
+                            <th>System Analysis</th><th>CLI Remark</th>
+                        </tr>
+                        ${reportData.stops.map((stop, index) => `
+                            <tr>
+                                <td>${stop.group}</td>
+                                <td>${stop.stopLocation}</td>
+                                <td>${stop.timeString}</td>
+                                <td>${(stop.kilometer / 1000).toFixed(2)}</td>
+                                <td>${stop.speedsBefore[0] || '0'}</td> <td>${stop.speedsBefore[1] || '0'}</td> <td>${stop.speedsBefore[2] || '0'}</td> <td>${stop.speedsBefore[3] || '0'}</td> <td>${stop.speedsBefore[4] || '0'}</td> <td>${stop.speedsBefore[5] || '0'}</td> <td>${stop.speedsBefore[6] || '0'}</td> <td>${stop.speedsBefore[7] || '0'}</td> <td>${stop.speedsBefore[8] || '0'}</td> <td>${stop.speedsBefore[9] || '0'}</td> <td>${stop.speedsBefore[10] || '0'}</td> <td class="system-analysis">
+                                    <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
+                                        <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
+                                        <option value="Late" ${stop.brakingTechnique === 'Late' ? 'selected' : ''}>Late</option>
+                                    </select>
+                                </td>
+                                <td><input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Remark..." style="width: 95%;"></td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                ` : '<p>No stops found.</p>'}
+            `;
             // Station Timings
             document.getElementById('station-timings').innerHTML = `
                 <h2>Station Timings</h2>
@@ -1187,42 +1181,51 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
         doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 40, y + 2);
         y += 10;
 
+        // --- Driving Analysis (PDF Table Update) ---
         if (reportData.stops?.length > 0) {
-            // Using autoTable here for simplicity as it's complex
-             const drivingBody = reportData.stops.map((stop, index) => {
-                 const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
-                 const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
-                 const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
-                 const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
-                 return [
-                     stop.group, stop.stopLocation, stop.timeString, stop.startTiming,
-                     (stop.kilometer / 1000).toFixed(2),
-                     stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'NA',
-                     stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'NA',
-                     stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'NA',
-                     stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'NA',
-                     stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'NA',
-                     finalSystemAnalysis,
-                     cliRemark
-                 ];
-             });
-             doc.autoTable({
-                 startY: y,
-                 head: [['Sr', 'Location', 'Stop', 'Start', 'Km', '1000', '800', '500', '100', '50', 'System', 'CLI Remark']],
-                 body: drivingBody,
-                 theme: 'grid',
-                 headStyles: { fillColor: [0, 51, 102], fontSize: 8, cellPadding: 1, textColor: 255 }, // NEW: Font 7 -> 8
-                 bodyStyles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' }, // NEW: Font 7 -> 8
-                 columnStyles: {
+            const drivingBody = reportData.stops.map((stop, index) => {
+                const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
+                const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
+                const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
+                const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
+                
+                return [
+                    stop.group, 
+                    stop.stopLocation.substring(0,15), // Location को छोटा किया
+                    stop.timeString.split(' ')[1] || stop.timeString, // सिर्फ समय दिखाया
+                    (stop.kilometer / 1000).toFixed(2),
+                    // 11 Speeds
+                    stop.speedsBefore[0] || '0', stop.speedsBefore[1] || '0', stop.speedsBefore[2] || '0',
+                    stop.speedsBefore[3] || '0', stop.speedsBefore[4] || '0', stop.speedsBefore[5] || '0',
+                    stop.speedsBefore[6] || '0', stop.speedsBefore[7] || '0', stop.speedsBefore[8] || '0',
+                    stop.speedsBefore[9] || '0', stop.speedsBefore[10] || '0',
+                    finalSystemAnalysis,
+                    cliRemark
+                ];
+            });
 
-                     // NEW: Column widths redistribute kiye gaye (Total 180)
-                     0: { cellWidth: 9 }, 1: { cellWidth: 27 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, // Col 1 ko 28 se 27 kiya
-                     4: { cellWidth: 11 }, 5: { cellWidth: 9 }, 6: { cellWidth: 9 }, 7: { cellWidth: 9 },
-                     8: { cellWidth: 9 }, 9: { cellWidth: 9 }, 10: { cellWidth: 21 }, 11: { cellWidth: 25}
-                 },
-                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
-             });
-             y = doc.lastAutoTable.finalY + 10;
+            doc.autoTable({
+                startY: y,
+                head: [['Sr', 'Location', 'Time', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'Analysis', 'Remark']],
+                body: drivingBody,
+                theme: 'grid',
+                headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1 }, // फॉन्ट छोटा किया (6pt)
+                bodyStyles: { fontSize: 6, cellPadding: 1 },
+                columnStyles: {
+                    0: { cellWidth: 5 },  // Sr
+                    1: { cellWidth: 22 }, // Location
+                    2: { cellWidth: 15 }, // Time
+                    3: { cellWidth: 10 }, // Km
+                    // Speed columns (4-14) को बहुत छोटा रखा है
+                    4: { cellWidth: 8 }, 5: { cellWidth: 8 }, 6: { cellWidth: 8 }, 7: { cellWidth: 8 }, 
+                    8: { cellWidth: 8 }, 9: { cellWidth: 8 }, 10: { cellWidth: 8 }, 11: { cellWidth: 8 }, 
+                    12: { cellWidth: 8 }, 13: { cellWidth: 8 }, 14: { cellWidth: 8 },
+                    15: { cellWidth: 15 }, // Analysis
+                    16: { cellWidth: 20 }  // Remark
+                },
+                didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
+            });
+            y = doc.lastAutoTable.finalY + 10;
         } else {
             doc.setFontSize(10).setFont('helvetica', 'normal');
             y = checkPageOverflow(y, 10);
