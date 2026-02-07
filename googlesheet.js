@@ -10,23 +10,26 @@ async function sendDataToGoogleSheet(data) {
 
     console.log("Preparing data for submission...");
 
-    // --- START: DATA COLLECTION & MAPPING FIX (CORRECTED) ---
+    // --- START: DATA COLLECTION & MAPPING FIX (BULLETPROOF VERSION) ---
 
-    // 1. Helper function to extract value from Arrays safely (Bug Fixed)
+    // 1. Helper function to extract value from Arrays safely
+    // यह नया फंक्शन क्रैश नहीं होगा चाहे डेटा कुछ भी हो
     const getVal = (arr, label) => {
         if (!arr || !Array.isArray(arr)) return '';
         
         // Find the item that matches the label
         const item = arr.find(d => {
-            // Case 1: Item is an object (e.g., Train Details)
-            if (typeof d === 'object' && d !== null && d.label) {
+            // Safety check: skip null or undefined
+            if (d === null || d === undefined) return false;
+
+            // Case 1: Item is an object (e.g., {label: 'Train...', value: '123'})
+            if (typeof d === 'object' && d.label) {
                 return d.label === label;
             }
-            // Case 2: Item is a string (e.g., LP Details "LP ID: 1234")
-            if (typeof d === 'string') {
-                return d.includes(label);
-            }
-            return false;
+            
+            // Case 2: Item is anything else (String, Number), convert to String first
+            // This prevents "d.includes is not a function" error
+            return String(d).includes(label);
         });
 
         if (!item) return '';
@@ -34,18 +37,22 @@ async function sendDataToGoogleSheet(data) {
         // Extract value based on type
         if (typeof item === 'object') {
             return item.value || '';
-        } else if (typeof item === 'string') {
-            return item.split(':')[1]?.trim() || '';
+        } else {
+            // If string like "LP ID: 1234", split it
+            const strItem = String(item);
+            if (strItem.includes(':')) {
+                return strItem.split(':')[1]?.trim() || '';
+            }
+            // If just a value found
+            return strItem;
         }
-        return '';
     };
 
     // 2. Map Array Data to Flat Variables (For Sheet1)
-    // Train Details Array se nikalein
     data.trainNo = getVal(data.trainDetails, 'Train Number');
     data.locoNo = getVal(data.trainDetails, 'Loco Number');
     
-    // Route se From/To nikalne ka logic
+    // Route Logic
     const route = getVal(data.trainDetails, 'Route');
     if (route && route.includes('-')) {
         data.fromStn = route.split('-')[0].trim();
@@ -60,7 +67,7 @@ async function sendDataToGoogleSheet(data) {
     data.section = getVal(data.trainDetails, 'Section');
     data.cliName = getVal(data.trainDetails, 'Analysis By');
 
-    // Crew Details Array se nikalein
+    // Crew Details
     data.lpId = getVal(data.lpDetails, 'LP ID');
     data.lpName = getVal(data.lpDetails, 'LP Name');
     data.lpGroup = getVal(data.lpDetails, 'Group CLI'); 
@@ -71,7 +78,7 @@ async function sendDataToGoogleSheet(data) {
 
     // Stats
     data.totalDist = data.speedRangeSummary?.totalDistance || '0';
-    // Calculate Max/Avg Speed from section summary
+    
     if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
         const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall'));
         data.maxSpeed = overall ? overall.maxSpeed : '0';
@@ -130,7 +137,7 @@ async function sendDataToGoogleSheet(data) {
     delete data.speedChartImage;
     delete data.stopChartImage;
 
-    // --- CRITICAL FIX: READ HQ FROM STORAGE ---
+    // --- CRITICAL: READ HQ ---
     let storedHq = localStorage.getItem('currentSessionHq');
     
     // Try DOM as backup
@@ -165,11 +172,10 @@ async function sendDataToGoogleSheet(data) {
                 payload: data
             })
         });
-        console.log('Data sent successfully to YOUR database.');
+        console.log('Data sent successfully to database.');
     } catch (error) {
         console.error('Error in fetch:', error);
         alert('Network Error. Data could not be saved.');
-        // Re-throw so report.html knows it failed
         throw error; 
     }
 }
