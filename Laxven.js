@@ -689,23 +689,25 @@ let processedStops = stops.map((stop, stopIndex) => { // Added stopIndex here
     // Line 919 ko isse replace karein (Yeh Sahi hai)
 
 // Pehle sabhi speeds ko parse karein
-const parsedSpeeds = speedsBefore.map(speed => parseFloat(speed) || Infinity);
+// --- सुधार: सही इंडेक्स मैपिंग और 5 पैरामीटर का उपयोग ---
+    const parsedSpeeds = speedsBefore.map(speed => parseFloat(speed) || 0);
 
-// Ab, array se sahi values chunein (index ke hisaab se)
-// parsedSpeeds[0] hai 1000m speed (jo logic mein nahi chahiye)
-const speed800m = parsedSpeeds[1]; // 800m speed
-const speed500m = parsedSpeeds[2]; // 500m speed
-const speed100m = parsedSpeeds[3]; // 100m speed
-const speed50m  = parsedSpeeds[4]; // 50m speed
-    let isSmooth;
-    if (rakeType === 'COACHING' || rakeType === 'MEMU') {
-        isSmooth = speed800m <= 60 && speed500m <= 45 && speed100m <= 30 && speed50m <= 20;
-    } else if (rakeType === 'GOODS') {
-        isSmooth = speed800m <= 40 && speed500m <= 25 && speed100m <= 15 && speed50m <= 10;
-    } else {
-        isSmooth = speed800m <= 60 && speed500m <= 30 && speed100m <= 20 && speed50m <= 20;
+    const s2000 = parsedSpeeds[0]; // 2000m
+    const s1000 = parsedSpeeds[1]; // 1000m
+    const s500  = parsedSpeeds[4]; // 500m (इंडेक्स 4 पर है)
+    const s100  = parsedSpeeds[7]; // 100m (इंडेक्स 7 पर है)
+    const s50   = parsedSpeeds[8]; // 50m  (इंडेक्स 8 पर है)
+
+    let isSmooth = false;
+    if (rakeType === 'GOODS') {
+        // Goods के नए नियम: 55, 40, 25, 15, 10
+        isSmooth = (s2000 <= 55 && s1000 <= 40 && s500 <= 25 && s100 <= 15 && s50 <= 10);
+    } else { 
+        // Coaching/MEMU के नए नियम: 100, 60, 50, 30, 15
+        isSmooth = (s2000 <= 100 && s1000 <= 60 && s500 <= 50 && s100 <= 30 && s50 <= 15);
     }
     const brakingTechnique = isSmooth ? 'Smooth' : 'Late';
+    // --- सुधार खत्म ---
 
     return { ...stop, stopLocation, startTiming: startTiming || 'N/A', duration, speedsBefore, brakingTechnique, isLastStopOfJourney };
 });
