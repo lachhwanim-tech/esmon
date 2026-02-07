@@ -13,7 +13,6 @@ async function sendDataToGoogleSheet(data) {
     // --- START: DATA COLLECTION & MAPPING FIX (BULLETPROOF VERSION) ---
 
     // 1. Helper function to extract value from Arrays safely
-    // यह नया फंक्शन क्रैश नहीं होगा चाहे डेटा कुछ भी हो
     const getVal = (arr, label) => {
         if (!arr || !Array.isArray(arr)) return '';
         
@@ -87,7 +86,6 @@ async function sendDataToGoogleSheet(data) {
         data.maxSpeed = '0';
         data.avgSpeed = '0';
     }
-
     // --- END MAPPING FIX ---
 
     // --- CONTINUE DATA COLLECTION ---
@@ -179,3 +177,83 @@ async function sendDataToGoogleSheet(data) {
         throw error; 
     }
 }
+
+// --- Event Listener (यह वह हिस्सा है जो पिछली बार छूट गया था) ---
+document.addEventListener('DOMContentLoaded', () => {
+    const downloadButton = document.getElementById('downloadReport');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    if (downloadButton) {
+        downloadButton.addEventListener('click', async () => { 
+            // 1. Validation Logic
+            let isValid = true;
+            let firstInvalidElement = null;
+
+            document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
+                const textId = chk.dataset.textId;
+                if (textId) {
+                    const textField = document.getElementById(textId);
+                    if (!textField || !textField.value.trim()) {
+                        alert(`Please enter a remark for the selected abnormality.`);
+                        if (textField && !firstInvalidElement) firstInvalidElement = textField;
+                        isValid = false;
+                    }
+                }
+            });
+            
+            const actionSelected = document.querySelector('input[name="actionTakenRadio"]:checked');
+            if (!actionSelected) {
+                 alert('Please select an option for "Action Taken".');
+                 isValid = false;
+            }
+
+            if (!isValid) return;
+
+            // 2. Disable button & Show Loader
+            downloadButton.disabled = true;
+            downloadButton.textContent = 'Processing...';
+            if(loadingOverlay) loadingOverlay.style.display = 'flex';
+
+            const reportDataString = localStorage.getItem('spmReportData');
+            if (reportDataString) {
+                let reportData;
+                try {
+                     reportData = JSON.parse(reportDataString);
+                } catch(e) {
+                     alert("Error retrieving data. Refresh page.");
+                     if(loadingOverlay) loadingOverlay.style.display = 'none';
+                     return;
+                }
+
+                try {
+                    // 3. Send Data
+                    await sendDataToGoogleSheet(reportData);
+                    
+                    // 4. Generate PDF
+                    if (typeof generatePDF === 'function') {
+                        await generatePDF(); 
+                        alert('Data submitted and report generated. Redirecting...');
+                        
+                        // 5. Cleanup & Redirect
+                        localStorage.removeItem('spmReportData');
+                        localStorage.removeItem('currentSessionHq');
+                        localStorage.removeItem('isOtherCliMode');
+                        localStorage.removeItem('customCliName');
+                        window.location.href = 'index.html'; 
+                    } else {
+                        alert('PDF function missing.');
+                    }
+                } catch (error) { 
+                    console.error("Error:", error);
+                    alert("Error during submission: " + error.message);
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = 'Download Report';
+                    if(loadingOverlay) loadingOverlay.style.display = 'none';
+                }
+            } else {
+                alert('No report data found.');
+                if(loadingOverlay) loadingOverlay.style.display = 'none';
+            }
+        }); 
+    }
+});
