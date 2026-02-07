@@ -10,49 +10,54 @@ async function sendDataToGoogleSheet(data) {
 
     console.log("Preparing data for submission...");
 
-    // --- START: DATA COLLECTION & MAPPING FIX (BULLETPROOF VERSION) ---
+    // --- START: DATA COLLECTION & MAPPING FIX (ROBUST VERSION) ---
 
-    // 1. Helper function to extract value from Arrays safely
-    const getVal = (arr, label) => {
+    // Helper: Find value nicely (Case insensitive & Partial match)
+    const getVal = (arr, labels) => {
         if (!arr || !Array.isArray(arr)) return '';
+        // Allow checking multiple label variations (e.g. "Loco No", "Loco Number")
+        const searchLabels = Array.isArray(labels) ? labels : [labels];
         
-        // Find the item that matches the label
         const item = arr.find(d => {
-            // Safety check: skip null or undefined
             if (d === null || d === undefined) return false;
-
-            // Case 1: Item is an object (e.g., {label: 'Train...', value: '123'})
-            if (typeof d === 'object' && d.label) {
-                return d.label === label;
-            }
             
-            // Case 2: Item is anything else (String, Number), convert to String first
-            // This prevents "d.includes is not a function" error
-            return String(d).includes(label);
+            // If Object
+            if (typeof d === 'object' && d.label) {
+                return searchLabels.some(l => d.label.toLowerCase().includes(l.toLowerCase()));
+            }
+            // If String
+            return searchLabels.some(l => String(d).toLowerCase().includes(l.toLowerCase()));
         });
 
         if (!item) return '';
 
-        // Extract value based on type
         if (typeof item === 'object') {
             return item.value || '';
         } else {
-            // If string like "LP ID: 1234", split it
             const strItem = String(item);
-            if (strItem.includes(':')) {
-                return strItem.split(':')[1]?.trim() || '';
-            }
-            // If just a value found
+            if (strItem.includes(':')) return strItem.split(':')[1]?.trim() || '';
             return strItem;
         }
     };
 
-    // 2. Map Array Data to Flat Variables (For Sheet1)
-    data.trainNo = getVal(data.trainDetails, 'Train Number');
-    data.locoNo = getVal(data.trainDetails, 'Loco Number');
+    // 2. Map Variables explicitly for Sheet1 columns
+    // Use multiple variations of labels to catch data from different SPM makes
     
-    // Route Logic
-    const route = getVal(data.trainDetails, 'Route');
+    // A. Train Details
+    data.trainNo = getVal(data.trainDetails, ['Train No', 'Train Number']);
+    data.locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']);
+    
+    // Journey Date: Try to find explicitly, else use start Date
+    let jDate = getVal(data.trainDetails, ['Date', 'Journey Date']);
+    if (!jDate && data.trainDetails) {
+        // Fallback: Try to extract date from the first timestamp found
+        const dateItem = data.trainDetails.find(d => d.value && (d.value.includes('/') || d.value.includes('-')));
+        if(dateItem) jDate = dateItem.value.split(' ')[0];
+    }
+    data.journeyDate = jDate || '';
+
+    // Route Logic (From/To)
+    const route = getVal(data.trainDetails, ['Route', 'Section']);
     if (route && route.includes('-')) {
         data.fromStn = route.split('-')[0].trim();
         data.toStn = route.split('-')[1].trim();
@@ -61,34 +66,36 @@ async function sendDataToGoogleSheet(data) {
         data.toStn = '';
     }
 
-    data.rakeType = getVal(data.trainDetails, 'Type of Rake');
-    data.mps = getVal(data.trainDetails, 'Max Permissible Speed');
-    data.section = getVal(data.trainDetails, 'Section');
-    data.cliName = getVal(data.trainDetails, 'Analysis By');
+    data.rakeType = getVal(data.trainDetails, ['Rake', 'Type']);
+    data.mps = getVal(data.trainDetails, ['MPS', 'Max Speed', 'Permissible']);
+    data.section = getVal(data.trainDetails, ['Section']); // Explicit Section field
+    data.cliName = getVal(data.trainDetails, ['Analysis By', 'CLI']);
 
-    // Crew Details
-    data.lpId = getVal(data.lpDetails, 'LP ID');
-    data.lpName = getVal(data.lpDetails, 'LP Name');
-    data.lpGroup = getVal(data.lpDetails, 'Group CLI'); 
+    // B. Crew Details
+    data.lpId = getVal(data.lpDetails, ['LP ID', 'ID']);
+    data.lpName = getVal(data.lpDetails, ['LP Name', 'Name']);
+    data.lpGroup = getVal(data.lpDetails, ['Group', 'HQ']); 
     
-    data.alpId = getVal(data.alpDetails, 'ALP ID');
-    data.alpName = getVal(data.alpDetails, 'ALP Name');
-    data.alpGroup = getVal(data.alpDetails, 'Group CLI');
+    data.alpId = getVal(data.alpDetails, ['ALP ID', 'ID']);
+    data.alpName = getVal(data.alpDetails, ['ALP Name', 'Name']);
+    data.alpGroup = getVal(data.alpDetails, ['Group', 'HQ']);
 
-    // Stats
+    // C. Stats
     data.totalDist = data.speedRangeSummary?.totalDistance || '0';
     
     if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
-        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall'));
+        // Try to find Overall, else take the first entry
+        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
         data.maxSpeed = overall ? overall.maxSpeed : '0';
         data.avgSpeed = overall ? overall.averageSpeed : '0';
     } else {
         data.maxSpeed = '0';
         data.avgSpeed = '0';
     }
+
     // --- END MAPPING FIX ---
 
-    // --- CONTINUE DATA COLLECTION ---
+    // --- ABNORMALITIES & REMARKS ---
     data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
     data.abnormality_bpt_nd = document.getElementById('chk-bpt-nd')?.checked ? 1 : 0;
     data.abnormality_bft_rule = document.getElementById('chk-bft-rule')?.checked ? 1 : 0;
@@ -108,6 +115,7 @@ async function sendDataToGoogleSheet(data) {
 
     data.abnormality = abnormalityStrings.join('; \n') || 'NIL'; 
     
+    // Save abnormalities to hidden field for PDF
     const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
     if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = data.abnormality;
 
@@ -120,6 +128,7 @@ async function sendDataToGoogleSheet(data) {
     data.bftRemark = document.getElementById('bftRemark')?.value.trim() || 'NA';
     data.bptRemark = document.getElementById('bptRemark')?.value.trim() || 'NA';
 
+    // Ensure stops data has CLI remarks
     if (data.stops && Array.isArray(data.stops)) {
         data.stops.forEach((stop, index) => {
             const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
@@ -129,20 +138,17 @@ async function sendDataToGoogleSheet(data) {
         });
     }
     
-    // Heavy images delete karke payload halka karein
+    // Cleanup heavy chart data before sending
     delete data.speedChartConfig;
     delete data.stopChartConfig;
     delete data.speedChartImage;
     delete data.stopChartImage;
 
-    // --- CRITICAL: READ HQ ---
+    // --- HQ ROUTING LOGIC ---
     let storedHq = localStorage.getItem('currentSessionHq');
-    
-    // Try DOM as backup
     if (!storedHq && document.getElementById('cliHqDisplay')) {
         storedHq = document.getElementById('cliHqDisplay').value;
     }
-
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
     data.cliHq = currentHq;
 
@@ -150,14 +156,12 @@ async function sendDataToGoogleSheet(data) {
 
     let targetUrl = primaryAppsScriptUrl;
     if (ALLOWED_HQS.includes(currentHq)) {
-        console.log(`MATCH: Sending to PRIMARY Sheet.`);
         targetUrl = primaryAppsScriptUrl;
     } else {
-        console.log(`NO MATCH: Sending to OTHER DIVISION Sheet.`);
         targetUrl = otherAppsScriptUrl;
     }
 
-   // --- SEND DATA logic ---
+   // --- SEND DATA ---
     try {
         await fetch(targetUrl, {
             method: 'POST',
@@ -178,7 +182,7 @@ async function sendDataToGoogleSheet(data) {
     }
 }
 
-// --- Event Listener (यह वह हिस्सा है जो पिछली बार छूट गया था) ---
+// --- Event Listener (Button Click Logic) ---
 document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.getElementById('downloadReport');
     const loadingOverlay = document.getElementById('loadingOverlay');
