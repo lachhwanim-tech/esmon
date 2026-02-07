@@ -1,219 +1,182 @@
 async function sendDataToGoogleSheet(data) {
-    // 1. Primary Apps Script URL (Main Sheet - SPM ANALYSIS BANK)
     const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec';
-
-    // 2. Secondary Apps Script URL (Other Sheet - OTHER DIVISION)
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
-
-    // --- ALLOWED HQ LIST ---
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Preparing data for submission...");
+    console.log("Preparing ordered data for submission...");
 
-    // --- START: DATA COLLECTION & MAPPING FIX (ROBUST VERSION) ---
-
-    // Helper: Find value nicely (Case insensitive & Partial match)
+    // 1. ROBUST GET VALUE FUNCTION
     const getVal = (arr, labels) => {
         if (!arr || !Array.isArray(arr)) return '';
-        // Allow checking multiple label variations (e.g. "Loco No", "Loco Number")
         const searchLabels = Array.isArray(labels) ? labels : [labels];
         
         const item = arr.find(d => {
             if (d === null || d === undefined) return false;
-            
-            // If Object
             if (typeof d === 'object' && d.label) {
                 return searchLabels.some(l => d.label.toLowerCase().includes(l.toLowerCase()));
             }
-            // If String
             return searchLabels.some(l => String(d).toLowerCase().includes(l.toLowerCase()));
         });
 
         if (!item) return '';
-
-        if (typeof item === 'object') {
-            return item.value || '';
-        } else {
-            const strItem = String(item);
-            if (strItem.includes(':')) return strItem.split(':')[1]?.trim() || '';
-            return strItem;
-        }
+        if (typeof item === 'object') return item.value || '';
+        const strItem = String(item);
+        return strItem.includes(':') ? strItem.split(':')[1]?.trim() || '' : strItem;
     };
 
-    // 2. Map Variables explicitly for Sheet1 columns
-    // Use multiple variations of labels to catch data from different SPM makes
-    
-    // A. Train Details
-    data.trainNo = getVal(data.trainDetails, ['Train No', 'Train Number']);
-    data.locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']);
-    
-    // Journey Date: Try to find explicitly, else use start Date
-    let jDate = getVal(data.trainDetails, ['Date', 'Journey Date']);
+    // 2. EXTRACTION LOGIC
+    // Route Splitter
+    let fromStn = '', toStn = '';
+    const route = getVal(data.trainDetails, ['Route', 'Section']);
+    if (route && route.includes('-')) {
+        [fromStn, toStn] = route.split('-').map(s => s.trim());
+    }
+
+    // Date Logic
+    let jDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
     if (!jDate && data.trainDetails) {
-        // Fallback: Try to extract date from the first timestamp found
         const dateItem = data.trainDetails.find(d => d.value && (d.value.includes('/') || d.value.includes('-')));
         if(dateItem) jDate = dateItem.value.split(' ')[0];
     }
-    data.journeyDate = jDate || '';
 
-    // Route Logic (From/To)
-    const route = getVal(data.trainDetails, ['Route', 'Section']);
-    if (route && route.includes('-')) {
-        data.fromStn = route.split('-')[0].trim();
-        data.toStn = route.split('-')[1].trim();
-    } else {
-        data.fromStn = '';
-        data.toStn = '';
-    }
-
-    data.rakeType = getVal(data.trainDetails, ['Rake', 'Type']);
-    data.mps = getVal(data.trainDetails, ['MPS', 'Max Speed', 'Permissible']);
-    data.section = getVal(data.trainDetails, ['Section']); // Explicit Section field
-    data.cliName = getVal(data.trainDetails, ['Analysis By', 'CLI']);
-
-    // B. Crew Details
-    data.lpId = getVal(data.lpDetails, ['LP ID', 'ID']);
-    data.lpName = getVal(data.lpDetails, ['LP Name', 'Name']);
-    data.lpGroup = getVal(data.lpDetails, ['Group', 'HQ']); 
-    
-    data.alpId = getVal(data.alpDetails, ['ALP ID', 'ID']);
-    data.alpName = getVal(data.alpDetails, ['ALP Name', 'Name']);
-    data.alpGroup = getVal(data.alpDetails, ['Group', 'HQ']);
-
-    // C. Stats
-    data.totalDist = data.speedRangeSummary?.totalDistance || '0';
-    
+    // Stats
+    let maxSpeed = '0', avgSpeed = '0';
     if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
-        // Try to find Overall, else take the first entry
         const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
-        data.maxSpeed = overall ? overall.maxSpeed : '0';
-        data.avgSpeed = overall ? overall.averageSpeed : '0';
-    } else {
-        data.maxSpeed = '0';
-        data.avgSpeed = '0';
+        maxSpeed = overall.maxSpeed || '0';
+        avgSpeed = overall.averageSpeed || '0';
     }
 
-    // --- END MAPPING FIX ---
+    // Abnormalities
+    const abn = {
+        bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
+        bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
+        bft_rule: document.getElementById('chk-bft-rule')?.checked ? 1 : 0,
+        bpt_rule: document.getElementById('chk-bpt-rule')?.checked ? 1 : 0,
+        late_ctrl: document.getElementById('chk-late-ctrl')?.checked ? 1 : 0,
+        overspeed: document.getElementById('chk-overspeed')?.checked ? 1 : 0,
+        others: document.getElementById('chk-others')?.checked ? 1 : 0
+    };
 
-    // --- ABNORMALITIES & REMARKS ---
-    data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
-    data.abnormality_bpt_nd = document.getElementById('chk-bpt-nd')?.checked ? 1 : 0;
-    data.abnormality_bft_rule = document.getElementById('chk-bft-rule')?.checked ? 1 : 0;
-    data.abnormality_bpt_rule = document.getElementById('chk-bpt-rule')?.checked ? 1 : 0;
-    data.abnormality_late_ctrl = document.getElementById('chk-late-ctrl')?.checked ? 1 : 0;
-    data.abnormality_overspeed = document.getElementById('chk-overspeed')?.checked ? 1 : 0;
-    data.abnormality_others = document.getElementById('chk-others')?.checked ? 1 : 0;
+    const abnStrings = [];
+    if (abn.bft_nd) abnStrings.push("BFT not done");
+    if (abn.bpt_nd) abnStrings.push("BPT not done");
+    if (abn.bft_rule) abnStrings.push(`BFT not done as per rule:- ${document.getElementById('txt-bft-rule')?.value.trim()}`);
+    if (abn.bpt_rule) abnStrings.push(`BPT not done as per rule:- ${document.getElementById('txt-bpt-rule')?.value.trim()}`);
+    if (abn.late_ctrl) abnStrings.push(`Late Controlling:- ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
+    if (abn.overspeed) abnStrings.push(`Over speeding:- ${document.getElementById('txt-overspeed')?.value.trim()}`);
+    if (abn.others) abnStrings.push(`Other Abnormalities:- ${document.getElementById('txt-others')?.value.trim()}`);
 
-    const abnormalityStrings = [];
-    if (data.abnormality_bft_nd) abnormalityStrings.push("BFT not done");
-    if (data.abnormality_bpt_nd) abnormalityStrings.push("BPT not done");
-    if (data.abnormality_bft_rule) abnormalityStrings.push(`BFT not done as per rule:- ${document.getElementById('txt-bft-rule')?.value.trim()}`);
-    if (data.abnormality_bpt_rule) abnormalityStrings.push(`BPT not done as per rule:- ${document.getElementById('txt-bpt-rule')?.value.trim()}`);
-    if (data.abnormality_late_ctrl) abnormalityStrings.push(`Late Controlling:- ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
-    if (data.abnormality_overspeed) abnormalityStrings.push(`Over speeding:- ${document.getElementById('txt-overspeed')?.value.trim()}`);
-    if (data.abnormality_others) abnormalityStrings.push(`Other Abnormalities:- ${document.getElementById('txt-others')?.value.trim()}`);
-
-    data.abnormality = abnormalityStrings.join('; \n') || 'NIL'; 
-    
-    // Save abnormalities to hidden field for PDF
-    const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
-    if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = data.abnormality;
-
-    data.cliObservation = document.getElementById('cliRemarks')?.value.trim() || 'NIL';
-    data.totalAbnormality = document.getElementById('totalAbnormality')?.value.trim() || '0';
-    
-    const selectedActionRadio = document.querySelector('input[name="actionTakenRadio"]:checked');
-    data.actionTaken = selectedActionRadio ? selectedActionRadio.value : 'NIL';
-
-    data.bftRemark = document.getElementById('bftRemark')?.value.trim() || 'NA';
-    data.bptRemark = document.getElementById('bptRemark')?.value.trim() || 'NA';
-
-    // Ensure stops data has CLI remarks
-    if (data.stops && Array.isArray(data.stops)) {
-        data.stops.forEach((stop, index) => {
-            const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
-            stop.finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
-            const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
-            stop.cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL'; 
-        });
-    }
-    
-    // Cleanup heavy chart data before sending
-    delete data.speedChartConfig;
-    delete data.stopChartConfig;
-    delete data.speedChartImage;
-    delete data.stopChartImage;
-
-    // --- HQ ROUTING LOGIC ---
+    // HQ Logic
     let storedHq = localStorage.getItem('currentSessionHq');
-    if (!storedHq && document.getElementById('cliHqDisplay')) {
-        storedHq = document.getElementById('cliHqDisplay').value;
-    }
+    if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
-    data.cliHq = currentHq;
 
-    console.log(`Final HQ for Routing: [${currentHq}]`);
+    // 3. CONSTRUCT STRICT ORDERED PAYLOAD (Exactly matching Sheet1 Headers)
+    // We create a new object to ensure clean data transmission
+    const orderedPayload = {
+        // --- Sheet1 Columns Mapping ---
+        dateTime: new Date().toLocaleString('en-GB'), // Current Timestamp
+        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI Name', 'CLI']) || data.cliName || '', // Fallback to manual entry
+        journeyDate: jDate,
+        trainNo: getVal(data.trainDetails, ['Train No', 'Train Number']),
+        locoNo: getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']),
+        fromStn: fromStn,
+        toStn: toStn,
+        rakeType: getVal(data.trainDetails, ['Rake', 'Type']),
+        mps: getVal(data.trainDetails, ['MPS', 'Max Speed', 'Permissible']),
+        section: getVal(data.trainDetails, ['Section']),
+        
+        lpId: getVal(data.lpDetails, ['LP ID', 'ID']),
+        lpName: getVal(data.lpDetails, ['LP Name', 'Name']),
+        lpGroup: getVal(data.lpDetails, ['Group', 'HQ']),
+        
+        alpId: getVal(data.alpDetails, ['ALP ID', 'ID']),
+        alpName: getVal(data.alpDetails, ['ALP Name', 'Name']),
+        alpGroup: getVal(data.alpDetails, ['Group', 'HQ']),
+        
+        bftStatus: document.getElementById('bftRemark')?.value.trim() || 'NA',
+        bptStatus: document.getElementById('bptRemark')?.value.trim() || 'NA',
+        overspeedCount: data.overSpeedDetails ? data.overSpeedDetails.length : 0,
+        totalDist: data.speedRangeSummary?.totalDistance || '0',
+        avgSpeed: avgSpeed,
+        maxSpeed: maxSpeed,
+        
+        cliObs: document.getElementById('cliRemarks')?.value.trim() || 'NIL',
+        actionTaken: document.querySelector('input[name="actionTakenRadio"]:checked')?.value || 'NIL',
+        
+        // Abnormality Counts (0/1)
+        bftNotDone: abn.bft_nd,
+        bptNotDone: abn.bpt_nd,
+        bftRule: abn.bft_rule,
+        bptRule: abn.bpt_rule,
+        lateCtrl: abn.late_ctrl,
+        overspeed: abn.overspeed,
+        other: abn.others,
+        totalAbn: document.getElementById('totalAbnormality')?.value.trim() || '0',
+        
+        spare: '', // Reserved column
+        uniqueId: '', // Script will generate this or we can leave empty
+        
+        // --- Extra Data for Tab 2 (Detailed Stops) ---
+        stops: data.stops, // Array for detailed sheet
+        abnormalityText: abnStrings.join('; \n') || 'NIL', // Full text for PDF/Sheet
+        cliHq: currentHq
+    };
 
-    let targetUrl = primaryAppsScriptUrl;
-    if (ALLOWED_HQS.includes(currentHq)) {
-        targetUrl = primaryAppsScriptUrl;
-    } else {
-        targetUrl = otherAppsScriptUrl;
-    }
+    // Update CLI Abnormalities field for PDF generation before sending
+    const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
+    if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = orderedPayload.abnormalityText;
 
-   // --- SEND DATA ---
+    // Routing
+    let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
+    console.log(`Routing to: ${targetUrl.includes('other') ? 'Other' : 'Primary'} based on HQ: ${currentHq}`);
+
+    // Send
     try {
         await fetch(targetUrl, {
             method: 'POST',
-            mode: 'no-cors', 
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type: 'data',
-                payload: data
+                payload: orderedPayload // Sending the clean, ordered object
             })
         });
-        console.log('Data sent successfully to database.');
+        console.log('Data sent successfully.');
     } catch (error) {
         console.error('Error in fetch:', error);
         alert('Network Error. Data could not be saved.');
-        throw error; 
+        throw error;
     }
 }
 
-// --- Event Listener (Button Click Logic) ---
+// --- Event Listener (Button Logic) ---
 document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.getElementById('downloadReport');
     const loadingOverlay = document.getElementById('loadingOverlay');
 
     if (downloadButton) {
         downloadButton.addEventListener('click', async () => { 
-            // 1. Validation Logic
             let isValid = true;
-            let firstInvalidElement = null;
-
             document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
                 const textId = chk.dataset.textId;
                 if (textId) {
                     const textField = document.getElementById(textId);
                     if (!textField || !textField.value.trim()) {
                         alert(`Please enter a remark for the selected abnormality.`);
-                        if (textField && !firstInvalidElement) firstInvalidElement = textField;
                         isValid = false;
                     }
                 }
             });
             
-            const actionSelected = document.querySelector('input[name="actionTakenRadio"]:checked');
-            if (!actionSelected) {
+            if (!document.querySelector('input[name="actionTakenRadio"]:checked')) {
                  alert('Please select an option for "Action Taken".');
                  isValid = false;
             }
 
             if (!isValid) return;
 
-            // 2. Disable button & Show Loader
             downloadButton.disabled = true;
             downloadButton.textContent = 'Processing...';
             if(loadingOverlay) loadingOverlay.style.display = 'flex';
@@ -221,32 +184,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const reportDataString = localStorage.getItem('spmReportData');
             if (reportDataString) {
                 let reportData;
-                try {
-                     reportData = JSON.parse(reportDataString);
-                } catch(e) {
-                     alert("Error retrieving data. Refresh page.");
-                     if(loadingOverlay) loadingOverlay.style.display = 'none';
-                     return;
+                try { reportData = JSON.parse(reportDataString); } 
+                catch(e) { 
+                    alert("Error retrieving data."); 
+                    if(loadingOverlay) loadingOverlay.style.display = 'none';
+                    return; 
                 }
 
                 try {
-                    // 3. Send Data
                     await sendDataToGoogleSheet(reportData);
                     
-                    // 4. Generate PDF
                     if (typeof generatePDF === 'function') {
                         await generatePDF(); 
                         alert('Data submitted and report generated. Redirecting...');
                         
-                        // 5. Cleanup & Redirect
                         localStorage.removeItem('spmReportData');
                         localStorage.removeItem('currentSessionHq');
                         localStorage.removeItem('isOtherCliMode');
                         localStorage.removeItem('customCliName');
                         window.location.href = 'index.html'; 
-                    } else {
-                        alert('PDF function missing.');
-                    }
+                    } else { alert('PDF function missing.'); }
                 } catch (error) { 
                     console.error("Error:", error);
                     alert("Error during submission: " + error.message);
