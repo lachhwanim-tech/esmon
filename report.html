@@ -1187,49 +1187,70 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
         }
         y += 10;
 
-        // --- Driving Analysis (केवल 11-पॉइंट्स वैल्यूज जोड़ी गई हैं) ---
-        // --- Driving Analysis (केवल 11-पॉइंट्स वैल्यूज जोड़ी गई हैं) ---
+        // --- Driving Analysis (Landscape Mode: 11-Point Braking Pattern) ---
         if (reportData.stops?.length > 0) {
-             const drivingBody = reportData.stops.map((stop, index) => {
-                 const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
-                 const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
-                 const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
-                 const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
-                 return [
-                     stop.group, 
-                     stop.stopLocation.substring(0,12), // Location को छोटा किया जगह बचाने के लिए
-                     stop.timeString.split(' ')[1] || stop.timeString,
-                     (stop.kilometer / 1000).toFixed(1),
-                     // 11 Speed Points Mapping (0 से 10 इंडेक्स)
-                     stop.speedsBefore[0] || '0', stop.speedsBefore[1] || '0', stop.speedsBefore[2] || '0', 
-                     stop.speedsBefore[3] || '0', stop.speedsBefore[4] || '0', stop.speedsBefore[5] || '0', 
-                     stop.speedsBefore[6] || '0', stop.speedsBefore[7] || '0', stop.speedsBefore[8] || '0', 
-                     stop.speedsBefore[9] || '0', stop.speedsBefore[10] || '0',
-                     finalSystemAnalysis,
-                     cliRemark
-                 ];
-             });
+            // 1. Add new page in Landscape mode
+            doc.addPage('a4', 'landscape');
+            y = margin; // Reset Y position for new page
 
-             doc.autoTable({
-                 startY: y,
-                 // Headers को 11 पॉइंट्स के लिए अपडेट किया गया
-                 head: [['Sr', 'Loc', 'Time', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'Sys', 'Remark']],
-                 body: drivingBody,
-                 theme: 'grid',
-                 headStyles: { fillColor: [0, 51, 102], fontSize: 5.5, cellPadding: 0.5, textColor: 255 },
-                 bodyStyles: { fontSize: 5.5, cellPadding: 0.5 },
-                 columnStyles: {
-                     // विड्थ को 11 पॉइंट्स फिट करने के लिए छोटा किया गया
-                     0: { cellWidth: 5 }, 1: { cellWidth: 20 }, 2: { cellWidth: 14 }, 3: { cellWidth: 8 },
-                     4: { cellWidth: 7 }, 5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 7 }, 
-                     8: { cellWidth: 7 }, 9: { cellWidth: 7 }, 10: { cellWidth: 7 }, 11: { cellWidth: 7 }, 
-                     12: { cellWidth: 7 }, 13: { cellWidth: 7 }, 14: { cellWidth: 7 },
-                     15: { cellWidth: 12 }, 16: { cellWidth: 18 }
-                 },
-                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
-             });
-             y = doc.lastAutoTable.finalY + 10;
+            // 2. Landscape Page Header
+            doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
+            doc.text('Driving Analysis (11-Point Braking Pattern)', margin, y);
+            doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 80, y + 2);
+            y += 10;
+
+            const drivingBody = reportData.stops.map((stop, index) => {
+                const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
+                const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
+                const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
+                const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
+                
+                return [
+                    stop.group, 
+                    stop.stopLocation, // अब पूरा Location दिखा रहे हैं (काटा नहीं है)
+                    stop.timeString.split(' ')[1] || stop.timeString,
+                    (stop.kilometer / 1000).toFixed(2),
+                    // 11 Speed Points (0 to 10)
+                    stop.speedsBefore[0]||'0', stop.speedsBefore[1]||'0', stop.speedsBefore[2]||'0', 
+                    stop.speedsBefore[3]||'0', stop.speedsBefore[4]||'0', stop.speedsBefore[5]||'0', 
+                    stop.speedsBefore[6]||'0', stop.speedsBefore[7]||'0', stop.speedsBefore[8]||'0', 
+                    stop.speedsBefore[9]||'0', stop.speedsBefore[10]||'0',
+                    finalSystemAnalysis,
+                    cliRemark
+                ];
+            });
+
+            doc.autoTable({
+                startY: y,
+                // Full Headers for Landscape
+                head: [['Sr', 'Location', 'Time', 'Km', '2000m', '1000m', '800m', '600m', '500m', '400m', '300m', '100m', '50m', '20m', '0m', 'Analysis', 'Remark']],
+                body: drivingBody,
+                theme: 'grid',
+                // Bigger Font (8pt) & Better Padding
+                headStyles: { fillColor: [0, 51, 102], fontSize: 8, cellPadding: 2, halign: 'center', textColor: 255 },
+                bodyStyles: { fontSize: 8, cellPadding: 2, halign: 'center' },
+                columnStyles: {
+                    0: { cellWidth: 10 },  // Sr
+                    1: { cellWidth: 40, halign: 'left' }, // Location (Left align)
+                    2: { cellWidth: 18 },  // Time
+                    3: { cellWidth: 15 },  // Km
+                    // Speed Columns (Width ~11 each)
+                    4:{cellWidth:11}, 5:{cellWidth:11}, 6:{cellWidth:11}, 7:{cellWidth:11},
+                    8:{cellWidth:11}, 9:{cellWidth:11}, 10:{cellWidth:11}, 11:{cellWidth:11},
+                    12:{cellWidth:11}, 13:{cellWidth:11}, 14:{cellWidth:11},
+                    15: { cellWidth: 20 }, // Analysis
+                    16: { cellWidth: 35, halign: 'left' }  // Remark
+                },
+                didDrawPage: (data) => { 
+                    // No footer needed for landscape table page
+                }
+            });
+            
+            // 3. Switch back to Portrait for next sections (Graphs etc.)
+            doc.addPage('a4', 'portrait'); 
+            y = margin; // Reset Y for the new portrait page
         } else {
+            // If no stops, just print message on current page (Portrait)
             doc.setFontSize(10).setFont('helvetica', 'normal');
             y = checkPageOverflow(y, 10);
             doc.text('No stops found in the selected range.', margin, y);
