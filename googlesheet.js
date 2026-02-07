@@ -3,111 +3,102 @@ async function sendDataToGoogleSheet(data) {
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Preparing Payload (Old Structure with Missing Data Fix)...");
+    console.log("Preparing Payload with Regex Extraction...");
 
-    // 1. IMPROVED GET VALUE FUNCTION (Cleaning Logic)
-    // यह फ़ंक्शन कोट्स (") और न्यूलाइन (\n) को हटाकर डेटा ढूँढेगा
-    const getVal = (arr, labels) => {
-        if (!arr || !Array.isArray(arr)) return '';
-        const searchLabels = Array.isArray(labels) ? labels : [labels];
-        
-        // Helper to clean strings: remove quotes, newlines, trim, lowercase
-        const clean = (str) => String(str || '').replace(/["\n\r]/g, '').trim().toLowerCase();
+    // 1. HELPER: CONVERT TRAIN DETAILS TO STRING FOR REGEX SEARCH
+    // हम पूरे डेटा को एक लंबी लाइन में बदल देंगे ताकि ढूँढना आसान हो
+    const trainDetailsStr = JSON.stringify(data.trainDetails || []);
 
-        const item = arr.find(d => {
-            if (!d) return false;
-            // Case 1: Object {label: "...", value: "..."}
-            if (typeof d === 'object' && d.label) {
-                const cleanLabel = clean(d.label);
-                return searchLabels.some(l => cleanLabel.includes(clean(l)));
+    // 2. REGEX EXTRACTION FUNCTION
+    // यह फंक्शन कचरे (", :, \n) के बीच से सही वैल्यू निकाल लाएगा
+    const extractByRegex = (text, patterns) => {
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match && match[1]) {
+                // वैल्यू मिल गई! अब कोट्स और स्पेस साफ़ करें
+                return match[1].replace(/["\\]/g, '').trim();
             }
-            // Case 2: String "Loco No: 123"
-            return searchLabels.some(l => clean(d).includes(clean(l)));
-        });
-
-        if (!item) return '';
-
-        let result = '';
-        if (typeof item === 'object') {
-            result = item.value || '';
-        } else {
-            const strItem = String(item);
-            result = strItem.includes(':') ? strItem.split(':')[1] : strItem;
         }
-        // Return value cleaned of quotes and newlines
-        return String(result).replace(/["\n\r]/g, '').trim();
+        return '';
     };
 
-    // --- 2. PREPARE DATA ---
+    // --- 3. DATA EXTRACTION (The Fix) ---
 
-    // A. DateTime (Keep Default to maintain your A & B Column split)
+    // A. DateTime (Default - This works with your Sheet's extra column)
     const currentDateTime = new Date().toLocaleString('en-GB'); 
 
-    // B. From/To Station (Priority: Station List from Page 7)
+    // B. Loco Number (Regex Search)
+    // यह "Loco Number","30315" या "Loco Number: 30315" सबको पकड़ लेगा
+    let locoNo = extractByRegex(trainDetailsStr, [
+        /Loco\s*N(?:umber|o)[\s"':,.-]+([0-9]+)/i,   // Matches: Loco Number","30315
+        /Loco[\s"':,.-]+([0-9]+)/i                    // Matches: Loco 30315
+    ]);
+
+    // C. Train Number (Regex Search)
+    let trainNo = extractByRegex(trainDetailsStr, [
+        /Train\s*N(?:umber|o)[\s"':,.-]+([0-9A-Z]+)/i, // Matches: Train Number","18238
+        /Train[\s"':,.-]+([0-9A-Z]+)/i
+    ]);
+
+    // D. From/To Station Logic
     let fromStn = '';
     let toStn = '';
-    
-    // Try getting from Station List (First & Last)
+    let route = '';
+
+    // Step 1: Priority - Check Station List (Page 7)
     if (data.stationStops && Array.isArray(data.stationStops) && data.stationStops.length > 0) {
         fromStn = data.stationStops[0].station || '';
         toStn = data.stationStops[data.stationStops.length - 1].station || '';
     }
-    
-    // Fallback: If Station List missing, split Route
+
+    // Step 2: Fallback - Extract "Route" from Page 1 (As per your Hint)
     if (!fromStn || !toStn) {
-        const route = getVal(data.trainDetails, ['Route', 'Section']);
+        // Regex to find "Route","DURG-BSP"
+        route = extractByRegex(trainDetailsStr, [
+            /Route[\s"':,.-]+([A-Z]+(?:\s*-\s*[A-Z]+))/i,
+            /Section[\s"':,.-]+([A-Z]+(?:\s*-\s*[A-Z]+))/i
+        ]);
+
         if (route && route.includes('-')) {
             const parts = route.split('-');
             if(!fromStn) fromStn = parts[0].trim();
             if(!toStn) toStn = parts[1].trim();
         }
     }
+    // Section (Route) field
+    let section = route || extractByRegex(trainDetailsStr, [/Section[\s"':,.-]+([A-Z]+(?:\s*-\s*[A-Z]+))/i]) || '';
 
-    // C. Journey Date (Smart Search)
-    let journeyDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
-    if (!journeyDate || journeyDate.length < 6) {
-        // Fallback: Look for date pattern in any text
-        const dateItem = data.trainDetails.find(d => {
-            const val = typeof d === 'object' ? d.value : String(d);
-            return val && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
-        });
-        if (dateItem) {
-            const val = typeof dateItem === 'object' ? dateItem.value : String(dateItem);
-            const matches = val.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
-            if (matches) journeyDate = matches[0];
+
+    // E. Extract Other Fields (Standard Method)
+    const getVal = (arr, label) => {
+        if (!arr) return '';
+        const item = arr.find(d => JSON.stringify(d).toLowerCase().includes(label.toLowerCase()));
+        if (item) {
+             const str = typeof item === 'object' ? item.value : String(item);
+             return String(str || '').replace(/["\n\r]/g, '').trim();
         }
-    }
-    if (!journeyDate) journeyDate = new Date().toLocaleDateString('en-GB');
+        return '';
+    };
 
-    // D. Extract Other Fields (Using Cleaned getVal)
-    // Note: Added extra synonyms to catch variations
-    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number', 'Train']);
-    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']);
-    let section = getVal(data.trainDetails, ['Section']) || getVal(data.trainDetails, ['Route']);
-    let rakeType = getVal(data.trainDetails, ['Type of Rake', 'Rake Type', 'Rake']);
-    let mps = getVal(data.trainDetails, ['Max Permissible', 'MPS', 'Max Speed']);
+    let rakeType = getVal(data.trainDetails, 'Rake');
+    let mps = getVal(data.trainDetails, 'MPS') || getVal(data.trainDetails, 'Max');
+    let journeyDate = getVal(data.trainDetails, 'Date');
     
-    // Blind backup for Loco/Train if header search fails but data exists in fixed rows
-    // (RTIS often has Loco in Row 1, Train in Row 2)
-    if (!locoNo && data.trainDetails[0]?.value) locoNo = String(data.trainDetails[0].value).replace(/["\n\r]/g, '').trim();
-    if (!trainNo && data.trainDetails[1]?.value) trainNo = String(data.trainDetails[1].value).replace(/["\n\r]/g, '').trim();
-
-    let lpId = getVal(data.lpDetails, ['LP ID', 'ID']);
-    let lpName = getVal(data.lpDetails, ['LP Name', 'Name']);
-    let lpGroup = getVal(data.lpDetails, ['Group', 'HQ']);
-    let alpId = getVal(data.alpDetails, ['ALP ID', 'ID']);
-    let alpName = getVal(data.alpDetails, ['ALP Name', 'Name']);
-    let alpGroup = getVal(data.alpDetails, ['Group', 'HQ']);
-
-    // E. Stats
-    let maxSpeed = '0', avgSpeed = '0';
-    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
-        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
-        maxSpeed = overall.maxSpeed || '0';
-        avgSpeed = overall.averageSpeed || '0';
+    // Fix Journey Date if missing
+    if (!journeyDate || journeyDate.length < 6) {
+        const dateMatch = trainDetailsStr.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+        if (dateMatch) journeyDate = dateMatch[0];
+        else journeyDate = new Date().toLocaleDateString('en-GB');
     }
 
-    // F. Abnormalities & Routing
+    let lpId = getVal(data.lpDetails, 'ID');
+    let lpName = getVal(data.lpDetails, 'Name');
+    let lpGroup = getVal(data.lpDetails, 'Group') || getVal(data.lpDetails, 'HQ');
+    let alpId = getVal(data.alpDetails, 'ID');
+    let alpName = getVal(data.alpDetails, 'Name');
+    let alpGroup = getVal(data.alpDetails, 'Group') || getVal(data.alpDetails, 'HQ');
+
+    // F. Abnormalities & Stats
     const abn = {
         bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
         bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
@@ -129,23 +120,33 @@ async function sendDataToGoogleSheet(data) {
     if (abn.others) abnStrings.push(`Other: ${document.getElementById('txt-others')?.value.trim()}`);
     const fullAbnormalityText = abnStrings.join('; ') || 'NIL';
     
+    // Stats
+    let maxSpeed = '0', avgSpeed = '0';
+    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
+        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
+        maxSpeed = overall.maxSpeed || '0';
+        avgSpeed = overall.averageSpeed || '0';
+    }
+
+    // Set Hidden PDF Fields
     const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
     if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = fullAbnormalityText;
 
+    // HQ Routing
     let storedHq = localStorage.getItem('currentSessionHq');
     if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
     let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
 
-    // --- 3. FINAL PAYLOAD (Maintain Old Keys, Fix Values Only) ---
+    // --- 4. FINAL PAYLOAD ---
     const payload = {
-        dateTime: currentDateTime, // Keeps the comma -> Fills Col A & B
-        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '',
+        dateTime: currentDateTime, // Sends "Date, Time" (Needs Col A & B)
+        cliName: getVal(data.trainDetails, 'Analysis By') || data.cliName || '',
         journeyDate: journeyDate,
-        trainNo: trainNo, // Now cleaned and found
-        locoNo: locoNo,   // Now cleaned and found
-        fromStn: fromStn, // From Station List
-        toStn: toStn,     // From Station List
+        trainNo: trainNo, // From Regex
+        locoNo: locoNo,   // From Regex
+        fromStn: fromStn, // From Station List or Route Regex
+        toStn: toStn,     // From Station List or Route Regex
         rakeType: rakeType,
         mps: mps,
         section: section,
@@ -185,7 +186,7 @@ async function sendDataToGoogleSheet(data) {
         cliHq: currentHq
     };
 
-    // --- 4. SEND ---
+    // --- 5. SEND ---
     try {
         await fetch(targetUrl, {
             method: 'POST',
