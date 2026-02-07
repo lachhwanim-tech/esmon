@@ -15,16 +15,16 @@ const spmConfig = {
     },
     brakeTests: {
         GOODS: {
-            bft: { minSpeed: 14, maxSpeed: 21, maxDuration: 60 * 1000 },
-            bpt: { minSpeed: 39, maxSpeed: 51, maxDuration: 60 * 1000 }
+            bft: { minSpeed: 12, maxSpeed: 24, maxDuration: 90 * 1000 },
+            bpt: { minSpeed: 35, maxSpeed: 55, maxDuration: 90 * 1000 }
         },
         COACHING: {
-            bft: { minSpeed: 14, maxSpeed: 21, maxDuration: 60 * 1000 },
-            bpt: { minSpeed: 59, maxSpeed: 71, maxDuration: 60 * 1000 }
+            bft: { minSpeed: 12, maxSpeed: 23, maxDuration: 90 * 1000 },
+            bpt: { minSpeed: 55, maxSpeed: 70, maxDuration: 90 * 1000 }
         },
         MEMU: {
-            bft: { minSpeed: 14, maxSpeed: 21, maxDuration: 60 * 1000 },
-            bpt: { minSpeed: 59, maxSpeed: 71, maxDuration: 60 * 1000 }
+            bft: { minSpeed: 12, maxSpeed: 23, maxDuration: 90 * 1000 },
+            bpt: { minSpeed: 55, maxSpeed: 70, maxDuration: 90 * 1000 }
         }
     }
 };
@@ -787,24 +787,32 @@ function getStopDetails(data, stopCode, section, fromDist, stations, rakeType) {
         if (atStation) stop.stopLocation = `${atStation['STATION']} ${atStation['SIGNAL NAME'] || ''}`.trim();
         else { let sec = stations.slice(0, -1).find((s, i) => stop.kilometer >= s.distance && stop.kilometer < stations[i+1].distance); stop.stopLocation = sec ? `${sec.name}-${stations[stations.indexOf(sec) + 1].name}` : 'Unknown'; }
 
-        // distances to report (meters) - order to match report.html: 1000, 800, 500, 100, 50
-        const targetList = [1000, 800, 500, 100, 50];
+        // --- रायपुर स्टैंडर्ड: 11-पॉइंट्स ब्रेकिंग ---
+        const targetList = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
 
         const speedsBefore = targetList.map(d => {
             const sp = getSpeedAtDistanceBeforeStop(stop.index, stop.kilometer, data, d);
-            return (sp === null || sp === undefined) ? 'N/A' : Number(sp).toFixed(0);
+            return (sp === null || sp === undefined) ? '0' : Number(sp).toFixed(0);
         });
 
-        // Convert to numeric for braking logic (Infinity if N/A)
-        const [s1000, s800, s500, s100, s50] = speedsBefore.map(s => isNaN(parseFloat(s)) ? Infinity : parseFloat(s));
+        // स्मूथ/लेट एनालिसिस के लिए 5 मुख्य चेकपॉइंट्स (Index Mapping)
+        const s2000 = parseFloat(speedsBefore[0]); // 2000m
+        const s1000 = parseFloat(speedsBefore[1]); // 1000m
+        const s500  = parseFloat(speedsBefore[4]); // 500m
+        const s100  = parseFloat(speedsBefore[7]); // 100m
+        const s50   = parseFloat(speedsBefore[8]); // 50m
 
-        // Smoothing thresholds - adjust if needed
-        const smooth = rakeType === 'GOODS'
-            ? (s1000 <= 40 && s800 <= 40 && s500 <= 25 && s100 <= 15 && s50 <= 10)
-            : (s1000 <= 60 && s800 <= 60 && s500 <= 45 && s100 <= 30 && s50 <= 20);
+        let isSmooth = false;
+        if (rakeType === 'GOODS') {
+            // Goods सीमाएं: 55, 40, 25, 15, 10
+            isSmooth = (s2000 <= 55 && s1000 <= 40 && s500 <= 25 && s100 <= 15 && s50 <= 10);
+        } else {
+            // Coaching सीमाएं: 100, 60, 50, 30, 15
+            isSmooth = (s2000 <= 100 && s1000 <= 60 && s500 <= 50 && s100 <= 30 && s50 <= 15);
+        }
 
-        stop.brakingTechnique = smooth ? 'Smooth' : 'Late';
-        stop.speedsBefore = speedsBefore;
+        stop.brakingTechnique = isSmooth ? 'Smooth' : 'Late';
+        stop.speedsBefore = speedsBefore; // अब यह 11 वैल्यूज़ भेजेगा
     });
     return stops;
 }
@@ -891,8 +899,8 @@ function calculateSectionSpeedSummary(data, stations, from, to) {
 }
 
 function getStopChartData(stops, data) {
-    // labels include common ticks; chart will plot speeds for each stop using robust lookup
-    const distanceLabels = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 50, 0];
+    // Line 420 के आसपास इसे बदलें:
+    const distanceLabels = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
     const datasets = stops.slice(0, 10).map((stop, index) => {
         const speeds = distanceLabels.map(targetDistance => {
             const sp = getSpeedAtDistanceBeforeStop(stop.index, stop.kilometer, data, targetDistance);
