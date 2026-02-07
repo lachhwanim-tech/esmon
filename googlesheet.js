@@ -1,84 +1,112 @@
-// googlesheet.js - FINAL (Duplicate Alert + Correct Headers)
+// googlesheet.js - Fixed: Reads HQ from LocalStorage
 
-// ⚠️ PASTE YOUR NEW DEPLOYMENT URL HERE
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxXT7kVown4wJQ4qhlZBAQTucPowD4MxaVtEwvcscs2uC1LNVs9seTGigA6OmoHRDLZ/exec';
+async function sendDataToGoogleSheet(data) {
+    // 1. Primary Apps Script URL (Main Sheet - SPM ANALYSIS BANK)
+    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyjtlUblBEvK-IHarOTh77ntNHQjueOCgqKAF0gefWCjYbejj_oVybT-UKhYsUSwu_AHg/exec';
 
-async function sendDataToGoogleSheet(reportData) {
+    // 2. Secondary Apps Script URL (Other Sheet - OTHER DIVISION)
+    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyjtlUblBEvK-IHarOTh77ntNHQjueOCgqKAF0gefWCjYbejj_oVybT-UKhYsUSwu_AHg/exec'; 
+
+    // --- ALLOWED HQ LIST ---
+    const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DRZ', 'DURG'];
+
+    // --- START: DATA COLLECTION ---
+    data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
+    data.abnormality_bpt_nd = document.getElementById('chk-bpt-nd')?.checked ? 1 : 0;
+    data.abnormality_bft_rule = document.getElementById('chk-bft-rule')?.checked ? 1 : 0;
+    data.abnormality_bpt_rule = document.getElementById('chk-bpt-rule')?.checked ? 1 : 0;
+    data.abnormality_late_ctrl = document.getElementById('chk-late-ctrl')?.checked ? 1 : 0;
+    data.abnormality_overspeed = document.getElementById('chk-overspeed')?.checked ? 1 : 0;
+    data.abnormality_others = document.getElementById('chk-others')?.checked ? 1 : 0;
+
+    const abnormalityStrings = [];
+    if (data.abnormality_bft_nd) abnormalityStrings.push("BFT not done");
+    if (data.abnormality_bpt_nd) abnormalityStrings.push("BPT not done");
+    if (data.abnormality_bft_rule) abnormalityStrings.push(`BFT not done as per rule:- ${document.getElementById('txt-bft-rule')?.value.trim()}`);
+    if (data.abnormality_bpt_rule) abnormalityStrings.push(`BPT not done as per rule:- ${document.getElementById('txt-bpt-rule')?.value.trim()}`);
+    if (data.abnormality_late_ctrl) abnormalityStrings.push(`Late Controlling:- ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
+    if (data.abnormality_overspeed) abnormalityStrings.push(`Over speeding:- ${document.getElementById('txt-overspeed')?.value.trim()}`);
+    if (data.abnormality_others) abnormalityStrings.push(`Other Abnormalities:- ${document.getElementById('txt-others')?.value.trim()}`);
+
+    data.abnormality = abnormalityStrings.join('; \n') || 'NIL'; 
     
-    let formData = {};
-    try { formData = JSON.parse(localStorage.getItem('spmFormData') || '{}'); } catch(e) {}
+    const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
+    if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = data.abnormality;
 
-    const payload = {
-        // Basic
-        cliName: formData.cliName || 'Unknown',
-        journeyDate: formData.journeyDate || '',
-        trainNumber: reportData.trainDetails?.find(d => d.label === 'Train Number')?.value || '',
-        locoNumber: formData.locoNumber || reportData.trainDetails?.find(d => d.label === 'Loco Number')?.value || '',
-        fromStation: formData.fromStation || '',
-        toStation: formData.toStation || '',
-        rakeType: reportData.trainDetails?.find(d => d.label === 'Type of Rake')?.value || '',
-        mps: formData.mps || '',
-        section: reportData.trainDetails?.find(d => d.label === 'Section')?.value || '',
+    data.cliObservation = document.getElementById('cliRemarks')?.value.trim() || 'NIL';
+    data.totalAbnormality = document.getElementById('totalAbnormality')?.value.trim() || '0';
+    
+    const selectedActionRadio = document.querySelector('input[name="actionTakenRadio"]:checked');
+    data.actionTaken = selectedActionRadio ? selectedActionRadio.value : 'NIL';
 
-        // Crew (No HQs)
-        lpId: reportData.lpDetails?.[0]?.split(':')[1]?.trim() || '',
-        lpName: reportData.lpDetails?.[1]?.split(':')[1]?.trim() || '',
-        lpGroupCli: formData.lpGroupCli || '',
-        alpId: reportData.alpDetails?.[0]?.split(':')[1]?.trim() || '',
-        alpName: reportData.alpDetails?.[1]?.split(':')[1]?.trim() || '',
-        alpGroupCli: formData.alpGroupCli || '',
+    data.bftRemark = document.getElementById('bftRemark')?.value.trim() || 'NA';
+    data.bptRemark = document.getElementById('bptRemark')?.value.trim() || 'NA';
 
-        // Metrics (Corrected BPT Logic)
-        bftStatus: reportData.bftDetails?.time ? 'Done' : 'Not Done',
-        bptStatus: reportData.bptDetails?.time ? 'Done' : 'Not Done',
-        overspeedCount: reportData.overSpeedDetails?.length || 0,
-        totalDistance: reportData.speedRangeSummary?.totalDistance || '0',
-        avgSpeed: reportData.sectionSpeedSummary?.[reportData.sectionSpeedSummary.length-1]?.averageSpeed || '',
-        maxSpeed: reportData.sectionSpeedSummary?.[reportData.sectionSpeedSummary.length-1]?.maxSpeed || '',
-
-        // CLI Inputs
-        cliObservation: document.getElementById('cliRemarks')?.value.trim() || 'NIL',
-        actionTaken: document.querySelector('input[name="actionTakenRadio"]:checked')?.value || 'NIL',
-        
-        // Flags
-        abnormality_bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
-        abnormality_bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
-        abnormality_bft_rule: document.getElementById('chk-bft-rule')?.checked ? 1 : 0,
-        abnormality_bpt_rule: document.getElementById('chk-bpt-rule')?.checked ? 1 : 0,
-        abnormality_late_ctrl: document.getElementById('chk-late-ctrl')?.checked ? 1 : 0,
-        abnormality_overspeed: document.getElementById('chk-overspeed')?.checked ? 1 : 0,
-        abnormality_others: document.getElementById('chk-others')?.checked ? 1 : 0,
-        totalAbnormality: document.getElementById('totalAbnormality')?.value.trim() || '0',
-
-        stops: []
-    };
-
-    // Stops
-    if (reportData.stops && Array.isArray(reportData.stops)) {
-        payload.stops = reportData.stops.map((stop, index) => {
+    if (data.stops && Array.isArray(data.stops)) {
+        data.stops.forEach((stop, index) => {
             const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
+            stop.finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
             const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
-            return {
-                ...stop,
-                brakingTechnique: systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique,
-                cliRemark: cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL'
-            };
+            stop.cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL'; 
         });
     }
+    
+    delete data.speedChartConfig;
+    delete data.stopChartConfig;
+    delete data.speedChartImage;
+    delete data.stopChartImage;
 
-    const finalPayload = { type: 'data', payload: payload };
+    // --- CRITICAL FIX: READ HQ FROM STORAGE ---
+    
+    // 1. Try LocalStorage (Saved during Submit)
+    let storedHq = localStorage.getItem('currentSessionHq');
+    
+    // 2. Try DOM (If still visible)
+    if (!storedHq && document.getElementById('cliHqDisplay')) {
+        storedHq = document.getElementById('cliHqDisplay').value;
+    }
 
-    // Standard Fetch to read Duplicate Response
-    const response = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        redirect: 'follow', 
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(finalPayload)
-    });
+    // 3. Normalize
+    let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
+    
+    // Update data payload
+    data.cliHq = currentHq;
 
-    return await response.json(); 
+    // Debugging
+    console.log(`Final HQ for Routing: [${currentHq}]`);
+
+    let targetUrl = primaryAppsScriptUrl;
+
+    // 4. CHECK LOGIC
+    if (ALLOWED_HQS.includes(currentHq)) {
+        console.log(`MATCH: Sending to PRIMARY Sheet.`);
+        targetUrl = primaryAppsScriptUrl;
+    } else {
+        console.log(`NO MATCH: Sending to OTHER DIVISION Sheet.`);
+        targetUrl = otherAppsScriptUrl;
+    }
+
+    // --- SEND DATA ---
+    try {
+        await fetch(targetUrl, {
+            method: 'POST',
+            mode: 'no-cors', 
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+
+        console.log('Data sent successfully.');
+
+    } catch (error) {
+        console.error('Error sending data to Google Sheet:', error);
+        alert('Network Error. Data could not be sent.');
+        throw error; 
+    }
 }
 
+// --- Event Listener ---
 document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.getElementById('downloadReport');
     const loadingOverlay = document.getElementById('loadingOverlay');
@@ -86,48 +114,66 @@ document.addEventListener('DOMContentLoaded', () => {
     if (downloadButton) {
         downloadButton.addEventListener('click', async () => { 
             let isValid = true;
+            let firstInvalidElement = null;
+
+            document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
+                const textId = chk.dataset.textId;
+                if (textId) {
+                    const textField = document.getElementById(textId);
+                    if (!textField || !textField.value.trim()) {
+                        alert(`Please enter a remark for the selected abnormality.`);
+                        if (textField && !firstInvalidElement) firstInvalidElement = textField;
+                        isValid = false;
+                    }
+                }
+            });
+            
             const actionSelected = document.querySelector('input[name="actionTakenRadio"]:checked');
-            if (!actionSelected) { alert('Select Action Taken.'); isValid = false; }
+            if (!actionSelected) {
+                 alert('Please select an option for "Action Taken".');
+                 isValid = false;
+            }
+
             if (!isValid) return;
 
             downloadButton.disabled = true;
-            downloadButton.textContent = 'Saving...';
+            downloadButton.textContent = 'Processing...';
             if(loadingOverlay) loadingOverlay.style.display = 'flex';
 
             const reportDataString = localStorage.getItem('spmReportData');
-            if (!reportDataString) return; 
-            const reportData = JSON.parse(reportDataString);
-
-            try {
-                const result = await sendDataToGoogleSheet(reportData);
-
-                if (result.status === 'duplicate') {
-                    // 🛑 STOP
-                    if(loadingOverlay) loadingOverlay.style.display = 'none';
-                    alert(`⚠️ DUPLICATE ENTRY BLOCKED!\n\nThis trip has already been analyzed by CLI: ${result.existingCli}\n\nData was NOT saved.`);
-                    downloadButton.disabled = false;
-                    downloadButton.textContent = 'Download Report';
-                    return; 
-                } 
-                else if (result.status === 'success') {
-                    // ✅ SUCCESS
-                    downloadButton.textContent = 'Generating PDF...';
-                    if (typeof generatePDF === 'function') {
-                        await generatePDF(); 
-                        alert('Data Saved & Report Generated!');
-                        localStorage.removeItem('spmReportData');
-                        localStorage.removeItem('spmFormData'); 
-                        window.location.href = 'index.html'; 
-                    }
-                } else {
-                    throw new Error(result.message || 'Unknown Error');
+            if (reportDataString) {
+                let reportData;
+                try {
+                     reportData = JSON.parse(reportDataString);
+                } catch(e) {
+                     alert("Error retrieving data. Refresh page.");
+                     if(loadingOverlay) loadingOverlay.style.display = 'none';
+                     return;
                 }
 
-            } catch (error) { 
-                console.error("Save Failed:", error);
-                alert("Data saved, but network response was unclear. Please check Sheet.");
-                downloadButton.disabled = false;
-                downloadButton.textContent = 'Download Report';
+                try {
+                    await sendDataToGoogleSheet(reportData);
+                    
+                    if (typeof generatePDF === 'function') {
+                        await generatePDF(); 
+                        alert('Data submitted and report generated. Redirecting...');
+                        
+                        localStorage.removeItem('spmReportData');
+                        localStorage.removeItem('currentSessionHq'); // Clean up HQ
+                        localStorage.removeItem('isOtherCliMode');
+                        localStorage.removeItem('customCliName');
+                        window.location.href = 'index.html'; 
+                    } else {
+                        alert('PDF function missing.');
+                    }
+                } catch (error) { 
+                    console.error("Error:", error);
+                    alert("Error during submission.");
+                    downloadButton.disabled = false;
+                    if(loadingOverlay) loadingOverlay.style.display = 'none';
+                }
+            } else {
+                alert('No report data found.');
                 if(loadingOverlay) loadingOverlay.style.display = 'none';
             }
         }); 

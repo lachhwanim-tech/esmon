@@ -1,4 +1,5 @@
-// RTIS.js - Updated with Strict User Logic (2000m Pattern & New BFT/BPT Rules)
+// RTIS.js - Full updated with Medha BFT/BPT + improved crew-call analysis + CSV support + speed rounding
+// Replace your existing RTIS.js with this file.
 
 const spmConfig = {
     type: 'RTIS',
@@ -12,24 +13,18 @@ const spmConfig = {
     eventCodes: {
         zeroSpeed: 'STOP'
     },
-    // --- UPDATED BFT & BPT CONFIGURATION ---
     brakeTests: {
         GOODS: {
-            // BFT: 12-24 kmph, 90 sec, Drop >= 5
-            bft: { minSpeed: 12, maxSpeed: 24, maxDuration: 90 * 1000, requiredDrop: 5 },
-            // BPT: 35-55 kmph, 90 sec, Drop >= 40%
-            bpt: { minSpeed: 35, maxSpeed: 55, maxDuration: 90 * 1000, dropPercentage: 0.40 }
+            bft: { minSpeed: 14, maxSpeed: 21, maxDuration: 60 * 1000 },
+            bpt: { minSpeed: 39, maxSpeed: 51, maxDuration: 60 * 1000 }
         },
         COACHING: {
-            // BFT: 12-23 kmph, 90 sec, Drop >= 5
-            bft: { minSpeed: 12, maxSpeed: 23, maxDuration: 90 * 1000, requiredDrop: 5 },
-            // BPT: 55-70 kmph, 90 sec, Drop >= 40%
-            bpt: { minSpeed: 55, maxSpeed: 70, maxDuration: 90 * 1000, dropPercentage: 0.40 }
+            bft: { minSpeed: 14, maxSpeed: 21, maxDuration: 60 * 1000 },
+            bpt: { minSpeed: 59, maxSpeed: 71, maxDuration: 60 * 1000 }
         },
         MEMU: {
-            // Same as COACHING
-            bft: { minSpeed: 12, maxSpeed: 23, maxDuration: 90 * 1000, requiredDrop: 5 },
-            bpt: { minSpeed: 55, maxSpeed: 70, maxDuration: 90 * 1000, dropPercentage: 0.40 }
+            bft: { minSpeed: 14, maxSpeed: 21, maxDuration: 60 * 1000 },
+            bpt: { minSpeed: 59, maxSpeed: 71, maxDuration: 60 * 1000 }
         }
     }
 };
@@ -105,6 +100,10 @@ function findNumericColumn(headers, rows) {
 }
 
 // ---------- Robust speed lookup helpers ----------
+/**
+ * Find nearest previous row index such that row is before stopIndex.
+ * Returns object {idx, row, distDiff} where distDiff = Math.abs((stopKm - row.Distance) - targetMeters)
+ */
 function findNearestPreviousRow(stopIndex, stopKm, data, targetMeters) {
     let best = null;
     let bestDiff = Infinity;
@@ -118,18 +117,55 @@ function findNearestPreviousRow(stopIndex, stopKm, data, targetMeters) {
     return best;
 }
 
+/**
+ * Primary helper: returns speed (number) at approximately `targetMeters` before the stop.
+ * Strategy:
+ *  1) Try strict previous row where (stopKm - row.Distance) >= targetMeters (closest earlier row meeting threshold)
+ *  2) If none, pick nearest previous row (closest distance difference)
+ *  3) (Optional) Linear interpolation block is commented — enable if you prefer interpolated speeds.
+ */
 function getSpeedAtDistanceBeforeStop(stopIndex, stopKm, data, targetMeters) {
+    // 1) Strict search - earliest row from back meeting >= targetMeters
     for (let i = stopIndex - 1; i >= 0; i--) {
         const distBefore = stopKm - data[i].Distance;
         if (distBefore >= targetMeters) {
             return Number(data[i].Speed) || 0;
         }
     }
+
+    // 2) nearest previous row fallback
     const nearest = findNearestPreviousRow(stopIndex, stopKm, data, targetMeters);
     if (nearest && nearest.row) {
         return Number(nearest.row.Speed) || 0;
     }
+
+    // 3) FURTHER FALLBACK: If nothing found, return 0 (should be rare)
     return 0;
+
+    /* OPTIONAL: Linear interpolation between surrounding rows (enable if you prefer)
+    // find two rows around the targetDistance (one just before and one just after target)
+    let before = null, after = null;
+    for (let i = stopIndex - 1; i >= 0; i--) {
+        const distBefore = stopKm - data[i].Distance;
+        if (distBefore >= targetMeters) { before = data[i]; break; }
+    }
+    // find 'after' (closer to stop, distance < targetMeters)
+    for (let i = stopIndex - 1; i >= 0; i--) {
+        const distBefore = stopKm - data[i].Distance;
+        if (distBefore < targetMeters) { after = data[i]; break; }
+    }
+    if (before && after) {
+        const d1 = stopKm - before.Distance; // >= targetMeters
+        const s1 = Number(before.Speed);
+        const d2 = stopKm - after.Distance; // < targetMeters
+        const s2 = Number(after.Speed);
+        // linear interpolate speed at targetMeters
+        const frac = (targetMeters - d2) / (d1 - d2);
+        return Number((s2 + frac * (s1 - s2)).toFixed(1));
+    }
+    // fallback nearest
+    return nearest ? Number(nearest.row.Speed) || 0 : 0;
+    */
 }
 
 // ---------- CUG parser ----------
@@ -170,7 +206,7 @@ const parseAndProcessCugData = (file) => {
     });
 };
 
-// ---------- trackSpeedReduction ----------
+// ---------- Medha-style trackSpeedReduction (improved) ----------
 function trackSpeedReductionMedha(data, startIdx, maxDurationMs) {
     const start = data[startIdx];
     if (!start) return null;
@@ -227,7 +263,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
         if (speedChartInstance) speedChartInstance.destroy();
         if (stopChartInstance) stopChartInstance.destroy();
 
-        // Upload step
+        // Upload step (kept from your earlier code)
         showToast('Uploading data and SPM file to Google Drive. This may take a moment...');
         await uploadDataAndFileToGoogle();
         showToast('Upload complete! Now analyzing the data for the report...');
@@ -267,16 +303,25 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
 
         if (!spmFile) throw new Error('Please select an SPM file (XLSX or CSV).');
 
+        // Determine extension
         const fileExt = (spmFile.name.split('.').pop() || '').toLowerCase();
+
+        // Read file (CSV -> text, XLSX -> arraybuffer)
         const reader = new FileReader();
         reader.onload = async (event) => {
             try {
                 let jsonDataRaw = [];
                 if (fileExt === 'csv') {
+                    // CSV parsing via PapaParse
                     const csvText = event.target.result;
                     const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true, dynamicTyping: false, transform: v => (typeof v === 'string' ? v.trim() : v) });
+                    if (parsed.errors && parsed.errors.length) {
+                        console.warn('CSV parse errors:', parsed.errors);
+                        // allow best-effort: use parsed.data if available
+                    }
                     jsonDataRaw = parsed.data || [];
                 } else {
+                    // XLSX
                     const data = new Uint8Array(event.target.result);
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                     const sheetName = workbook.SheetNames[0];
@@ -287,13 +332,15 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                 if (!jsonDataRaw || jsonDataRaw.length === 0) throw new Error("The selected SPM file is empty or invalid.");
 
                 const headers = Object.keys(jsonDataRaw[0]);
+
+                // Resolve keys (auto-detect)
                 let timeKey = spmConfig.columnNames.time;
                 let speedKey = spmConfig.columnNames.speed;
                 let distanceKey = spmConfig.columnNames.distance;
 
-                // Auto-detect Logic
                 const trainBiasNew = (trainNumber && trainNumber.toString().trim() === '37178');
                 const trainBiasOld = (trainNumber && trainNumber.toString().trim() === '41143');
+
                 const hasDeviceId = headers.find(h => (h || '').toString().toLowerCase().includes('device'));
                 const hasLoggingTime = headers.find(h => (h || '').toString().toLowerCase().includes('logging') || (h || '').toString().toLowerCase().includes('logging time') || (h || '').toString().toLowerCase().includes('loggingtime'));
                 const hasLatitude = headers.find(h => (h || '').toString().toLowerCase().includes('latitude'));
@@ -352,27 +399,35 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                     distanceKey = findHeaderLike(headers, ['distfromprev', 'distfromprevlatlng', 'distance', 'dist']) || hasDistFromSpeed || findNumericColumn(headers, jsonDataRaw);
                 }
 
-                console.log('Resolved keys:', { timeKey, speedKey, distanceKey });
+                console.log('Resolved keys:', { timeKey, speedKey, distanceKey, likelyNewFormat, trainNumber });
 
                 let cumulativeDistanceMeters = 0;
                 const parsedData = jsonDataRaw.map((row, idx) => {
+                    // distance increment (some CSV/XLSX files may have cumulative distances or increments; this code assumes "distFromPrev" increments)
                     const incrRaw = distanceKey ? row[distanceKey] : null;
                     const distanceIncrement = parseFloat((incrRaw === null || incrRaw === undefined) ? 0 : String(incrRaw).replace(',', '.')) || 0;
                     cumulativeDistanceMeters += distanceIncrement;
 
+                    // Time parsing (robust)
                     const timeValue = row[timeKey];
                     let parsedTime = parseExcelOrStringDate(timeValue);
                     if ((!parsedTime || isNaN(parsedTime.getTime())) && typeof timeValue === 'string' && /^\d+(\.\d+)?$/.test(timeValue.trim())) {
                         parsedTime = excelSerialToJSDate(Number(timeValue.trim()));
                     }
                     if (!parsedTime || isNaN(parsedTime.getTime())) {
+                        // try fallback: look for any column which looks like a date
                         const dateCol = Object.keys(row).find(h => h.toLowerCase().includes('time') || h.toLowerCase().includes('date'));
                         if (dateCol && row[dateCol]) parsedTime = parseExcelOrStringDate(row[dateCol]);
                     }
-                    if (!parsedTime || isNaN(parsedTime.getTime())) return null;
+                    if (!parsedTime || isNaN(parsedTime.getTime())) {
+                        console.warn(`Row ${idx} invalid time:`, timeValue);
+                        return null;
+                    }
 
+                    // Speed parsing with rounding logic
                     let speedVal = (speedKey ? row[speedKey] : null);
                     if (speedVal === null || speedVal === undefined || speedVal === '') {
+                        // try find another numeric column as fallback
                         const alt = Object.keys(row).find(h => {
                             const v = row[h];
                             if (v === null || v === undefined || v === '') return false;
@@ -384,6 +439,8 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
 
                     let speedNum = parseFloat(String(speedVal).replace(',', '.'));
                     if (isNaN(speedNum)) speedNum = 0;
+
+                    // --- NEW: treat very small floats as zero and round to 0 decimals ---
                     if (Math.abs(speedNum) < 0.5) {
                         speedNum = 0;
                     } else {
@@ -392,7 +449,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
 
                     return {
                         Time: parsedTime,
-                        Distance: cumulativeDistanceMeters / 1000,
+                        Distance: cumulativeDistanceMeters / 1000, // km
                         Speed: speedNum,
                         EventGn: (speedNum === 0) ? spmConfig.eventCodes.zeroSpeed : ''
                     };
@@ -400,6 +457,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
 
                 if (parsedData.length === 0) throw new Error('No valid data with recognizable dates found in the file.');
 
+                // station map
                 const stationMap = new Map();
                 window.stationSignalData.filter(r => r['SECTION'] === section).forEach(r => {
                     if (!stationMap.has(r['STATION'])) stationMap.set(r['STATION'], { name: r['STATION'], distance: parseFloat(r['CUMMULATIVE DISTANT(IN Meter)']) || 0 });
@@ -411,6 +469,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                 const fromDistance = fromStation.distance;
                 parsedData.forEach(row => row.NormalizedDistance = (row.Distance * 1000) - fromDistance);
 
+                // Departure detection (first valid movement)
                 let departureIndex = parsedData.findIndex((row, i, arr) => {
                     if (row.Time < fromDateTime || row.Time > toDateTime || row.Speed < 1) return false;
                     let distMoved = 0, startDist = row.Distance;
@@ -436,11 +495,13 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                 const routeStations = stationsData.slice(Math.min(fromIdx, toIdx), Math.max(fromIdx, toIdx) + 1);
                 let normalizedStations = routeStations.map(s => ({ name: s.name, distance: Math.abs(s.distance - fromDistance) }));
 
+                // --------- ANALYSIS: OverSpeed, WheelSlip/Skid, Stops, Brake Tests (Medha) ---------
                 const overSpeedDetails = getOverSpeedDetails(normalizedData, maxPermissibleSpeed, normalizedStations);
                 const { wheelSlipDetails, wheelSkidDetails } = getWheelSlipAndSkidDetails(normalizedData, normalizedStations);
 
                 let stops = getStopDetails(normalizedData, spmConfig.eventCodes.zeroSpeed, section, fromDistance, normalizedStations, rakeType);
 
+                // BFT/BPT using Medha improved logic (first instance)
                 const brakeConf = spmConfig.brakeTests[rakeType] || spmConfig.brakeTests.GOODS;
                 let bftDetails = null, bptDetails = null, bftMissed = false, bptMissed = false;
 
@@ -448,13 +509,13 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                     const row = normalizedData[i];
                     const speed = row.Speed;
 
-                    // --- BFT LOGIC (Updated) ---
+                    // BFT
                     if (!bftDetails && !bftMissed) {
                         if (speed >= brakeConf.bft.minSpeed && speed <= brakeConf.bft.maxSpeed) {
                             const res = trackSpeedReductionMedha(normalizedData, i, brakeConf.bft.maxDuration);
                             if (res && res.timeDiff > 1) {
                                 const reduction = speed - res.speed;
-                                if (reduction >= (brakeConf.bft.requiredDrop || 5)) {
+                                if (reduction >= 5) {
                                     bftDetails = {
                                         time: row.Time.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }),
                                         startSpeed: speed.toFixed(0),
@@ -470,13 +531,13 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                         }
                     }
 
-                    // --- BPT LOGIC (Updated) ---
+                    // BPT
                     if (!bptDetails && !bptMissed) {
                         if (speed >= brakeConf.bpt.minSpeed && speed <= brakeConf.bpt.maxSpeed) {
                             const res = trackSpeedReductionMedha(normalizedData, i, brakeConf.bpt.maxDuration);
                             if (res && res.timeDiff > 1) {
                                 const reduction = speed - res.speed;
-                                const requiredReduction = speed * (brakeConf.bpt.dropPercentage || 0.40); 
+                                const requiredReduction = Math.max(5, Math.round(speed * 0.40)); // Medha: >=40% OR >=5 kmph
                                 if (reduction >= requiredReduction) {
                                     bptDetails = {
                                         time: row.Time.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }),
@@ -496,6 +557,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                     if ((bftDetails || bftMissed) && (bptDetails || bptMissed)) break;
                 }
 
+                // Crew call analysis (Medha style)
                 const analyzeCallsMedha = (calls, designation) => {
                     if (!calls || calls.length === 0) return [];
                     return calls.map((call, idx) => {
@@ -517,6 +579,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                         }
                         const totalCalc = runDuration + stopDuration;
                         if (totalCalc > 0) {
+                            // Proportionally scale to reported call duration
                             const scale = totalDuration / totalCalc;
                             runDuration = Math.round(runDuration * scale);
                             stopDuration = Math.round(stopDuration * scale);
@@ -536,10 +599,15 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
                 };
 
                 const crewCallData = [...analyzeCallsMedha(lpCalls, lpDesg || 'LP'), ...analyzeCallsMedha(alpCalls, alpDesg || 'ALP')];
+
+                // Station arrival/departure
                 const stationStops = getStationArrivalDeparture(normalizedStations, stops, filteredData, normalizedData, fromSection, toSection);
+
+                // Speed summaries (functions defined below same as earlier)
                 const speedRangeSummary = calculateSpeedRangeSummary(normalizedData, rakeType, maxPermissibleSpeed);
                 const sectionSpeedSummary = calculateSectionSpeedSummary(normalizedData, normalizedStations, fromSection, toSection);
 
+                // Charts & images (same pattern as before)
                 const maxPoints = 500;
                 const sampledData = normalizedData.length > maxPoints ? normalizedData.filter((_, i) => i % Math.ceil(normalizedData.length / maxPoints) === 0) : normalizedData;
                 const speedChartConfig = {
@@ -651,7 +719,7 @@ document.getElementById('spmForm').addEventListener('submit', async (e) => {
     }
 });
 
-// ---------- Helper analysis functions ----------
+// ---------- Helper analysis functions (existing logic kept) ----------
 
 function getOverSpeedDetails(data, maxSpeed, stations) {
     const details = []; let group = null;
@@ -719,34 +787,21 @@ function getStopDetails(data, stopCode, section, fromDist, stations, rakeType) {
         if (atStation) stop.stopLocation = `${atStation['STATION']} ${atStation['SIGNAL NAME'] || ''}`.trim();
         else { let sec = stations.slice(0, -1).find((s, i) => stop.kilometer >= s.distance && stop.kilometer < stations[i+1].distance); stop.stopLocation = sec ? `${sec.name}-${stations[stations.indexOf(sec) + 1].name}` : 'Unknown'; }
 
-        // --- UPDATED BRAKING PATTERN LOGIC ---
-        // distances to report (meters): 2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0
-        const targetList = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
+        // distances to report (meters) - order to match report.html: 1000, 800, 500, 100, 50
+        const targetList = [1000, 800, 500, 100, 50];
 
         const speedsBefore = targetList.map(d => {
-            if (d === 0) return '0';
             const sp = getSpeedAtDistanceBeforeStop(stop.index, stop.kilometer, data, d);
             return (sp === null || sp === undefined) ? 'N/A' : Number(sp).toFixed(0);
         });
 
-        // Convert to numeric
-        const parsedSpeeds = speedsBefore.map(s => isNaN(parseFloat(s)) ? Infinity : parseFloat(s));
-        
-        // Indices: 0(2000), 1(1000), 2(800), 3(600), 4(500), 5(400), 6(300), 7(100), 8(50), 9(20), 10(0)
-        const speed2000m = parsedSpeeds[0];
-        const speed1000m = parsedSpeeds[1];
-        const speed500m = parsedSpeeds[4];
-        const speed100m = parsedSpeeds[7];
-        const speed50m = parsedSpeeds[8];
+        // Convert to numeric for braking logic (Infinity if N/A)
+        const [s1000, s800, s500, s100, s50] = speedsBefore.map(s => isNaN(parseFloat(s)) ? Infinity : parseFloat(s));
 
-        let smooth;
-        if (rakeType === 'COACHING' || rakeType === 'MEMU') {
-            // 2000m<=100, 1000m<=60, 500m<=50, 100m<=30, 50m<=15
-            smooth = (speed2000m <= 100 && speed1000m <= 60 && speed500m <= 50 && speed100m <= 30 && speed50m <= 15);
-        } else {
-            // GOODS: 2000m<=55, 1000m<=40, 500m<=25, 100m<=15, 50m<=10
-            smooth = (speed2000m <= 55 && speed1000m <= 40 && speed500m <= 25 && speed100m <= 15 && speed50m <= 10);
-        }
+        // Smoothing thresholds - adjust if needed
+        const smooth = rakeType === 'GOODS'
+            ? (s1000 <= 40 && s800 <= 40 && s500 <= 25 && s100 <= 15 && s50 <= 10)
+            : (s1000 <= 60 && s800 <= 60 && s500 <= 45 && s100 <= 30 && s50 <= 20);
 
         stop.brakingTechnique = smooth ? 'Smooth' : 'Late';
         stop.speedsBefore = speedsBefore;
@@ -836,8 +891,8 @@ function calculateSectionSpeedSummary(data, stations, from, to) {
 }
 
 function getStopChartData(stops, data) {
-    // UPDATED LABELS: 2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0
-    const distanceLabels = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
+    // labels include common ticks; chart will plot speeds for each stop using robust lookup
+    const distanceLabels = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 50, 0];
     const datasets = stops.slice(0, 10).map((stop, index) => {
         const speeds = distanceLabels.map(targetDistance => {
             const sp = getSpeedAtDistanceBeforeStop(stop.index, stop.kilometer, data, targetDistance);

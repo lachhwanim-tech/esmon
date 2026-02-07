@@ -343,25 +343,29 @@
     <button id="backToForm" class="back-button">Back to Form</button>
 
   </div>
-        
+       
     <script>
         // Show loading overlay
         const loadingOverlay = document.getElementById('loadingOverlay');
         loadingOverlay.style.display = 'flex';
 
         // Load report data
-        let previousAbnormalityCounts = {};
-        let globalPreviousAbnormalitiesList = []; 
-        let reportData;
+        let previousAbnormalityCounts = {};
+        let globalPreviousAbnormalitiesList = []; // <-- ADD THIS LINE
+        let reportData;
         try {
             reportData = JSON.parse(localStorage.getItem('spmReportData') || '{}');
             console.log('Retrieved reportData:', reportData);
+            console.log('Speed Chart Config:', reportData.speedChartConfig);
+            console.log('Stop Chart Config:', reportData.stopChartConfig);
+            console.log('Speed Chart Image:', reportData.speedChartImage ? 'Present' : 'Missing');
+            console.log('Stop Chart Image:', reportData.stopChartImage ? 'Present' : 'Missing');
         } catch (error) {
             console.error('Error parsing reportData:', error);
             reportData = {};
         }
 
-        // Include spmConfig for brake tests (Fallback)
+        // Include spmConfig for brake tests
         const spmConfig = {
             brakeTests: {
                 GOODS: { bft: { minSpeed: 20, maxSpeed: 30 }, bpt: { minSpeed: 40, maxSpeed: 50 } },
@@ -392,6 +396,7 @@
             `;
 
             // Crew Details
+           // Crew Details
             document.getElementById('crew-details').innerHTML = `
                 <h2>Crew Details</h2>
                 <div class="crew-details-container">
@@ -470,50 +475,43 @@
                 </table>
             `;
 
-            // Driving Analysis (UPDATED FOR 2000m-0m PATTERN)
-            document.getElementById('driving-analysis').innerHTML = `
-                <h2>Driving Analysis</h2>
-                ${reportData.stops?.length > 0 ? `
-                    <table class="report-table">
-                        <tr>
-                            <th>Sr.</th><th>Location</th><th>Stop Time</th><th>Start Time</th><th>Km</th>
-                            <th>2000m</th><th>1000m</th><th>800m</th><th>600m</th><th>500m</th><th>400m</th><th>300m</th><th>100m</th><th>50m</th><th>20m</th><th>0m</th>
-                            <th>System</th>
-                            <th>CLI Remark</th>
-                        </tr>
-                        ${reportData.stops.map((stop, index) => `
-                            <tr>
-                                <td>${stop.group}</td>
-                                <td>${stop.stopLocation}</td>
-                                <td>${stop.timeString}</td>
-                                <td>${stop.startTiming}</td>
-                                <td>${(stop.kilometer / 1000).toFixed(2)}</td>
-                                <td>${stop.speedsBefore[0] || 'NA'}</td>
-                                <td>${stop.speedsBefore[1] || 'NA'}</td>
-                                <td>${stop.speedsBefore[2] || 'NA'}</td>
-                                <td>${stop.speedsBefore[3] || 'NA'}</td>
-                                <td>${stop.speedsBefore[4] || 'NA'}</td>
-                                <td>${stop.speedsBefore[5] || 'NA'}</td>
-                                <td>${stop.speedsBefore[6] || 'NA'}</td>
-                                <td>${stop.speedsBefore[7] || 'NA'}</td>
-                                <td>${stop.speedsBefore[8] || 'NA'}</td>
-                                <td>${stop.speedsBefore[9] || 'NA'}</td>
-                                <td>${stop.speedsBefore[10] || 'NA'}</td>
-                                <td class="system-analysis">
-                                    <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
-                                        <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
-                                        <option value="Late" ${stop.brakingTechnique === 'Late' ? 'selected' : ''}>Late</option>
-                                    </select>
-                                </td>
-                                <td>
-                                    <input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Remark..." style="width: 90%;">
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </table>
-                ` : '<p>No stops found in the selected range.</p>'}
-            `;
-
+            // Driving Analysis (MODIFIED SECTION)
+        document.getElementById('driving-analysis').innerHTML = `
+              <h2>Driving Analysis</h2>
+    ${reportData.stops?.length > 0 ? `
+        <table class="report-table">
+            <tr>
+                <th>Sr. No.</th><th>Stop Location</th><th>Stop Timing</th><th>Start Timing</th><th>Km</th>
+                <th>1000m</th><th>800m</th><th>500m</th><th>100m</th><th>50m</th>
+                <th>System Generated Analysis</th>
+                <th>CLI Remark</th>
+            </tr>
+            ${reportData.stops.map((stop, index) => `
+                <tr>
+                    <td>${stop.group}</td>
+                    <td>${stop.stopLocation}</td>
+                    <td>${stop.timeString}</td>
+                    <td>${stop.startTiming}</td>
+                    <td>${(stop.kilometer / 1000).toFixed(2)}</td>
+                    <td>${stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'N/A'}</td>
+                    <td class="system-analysis">
+                        <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
+                            <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
+                            <option value="Late" ${stop.brakingTechnique === 'Late' ? 'selected' : ''}>Late</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Enter remark..." style="width: 95%;">
+                    </td>
+                </tr>
+            `).join('')}
+        </table>
+    ` : '<p>No stops found in the selected range.</p>'}
+        `;
             // Station Timings
             document.getElementById('station-timings').innerHTML = `
                 <h2>Station Timings</h2>
@@ -529,6 +527,7 @@
                 </table>
             `;
              // Speed Range Summary
+           // Speed Range Summary
             document.getElementById('speed-range-summary').innerHTML = `
                 <h2>Distance Covered During Speed Range</h2>
                 ${reportData.speedRangeSummary?.summary?.length > 0 ? `
@@ -686,11 +685,10 @@
                         console.error('Stop Chart canvas not found');
                         document.getElementById('speed-distance').innerHTML += '<p class="error-message">Speed vs. Distance chart canvas not found.</p>';
                     } else {
-                        // UPDATED LABELS FOR 2000m
-                        let stopLabels = reportData.stopChartConfig?.labels || [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
+                        let stopLabels = reportData.stopChartConfig?.labels || [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 0];
                         let stopDatasets = reportData.stopChartConfig?.datasets || [{
                             label: 'Test Stop',
-                            data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                            data: [30, 28, 25, 20, 15, 10, 8, 5, 3, 1, 0],
                             borderColor: '#FF0000',
                             backgroundColor: 'transparent',
                             fill: false,
@@ -736,17 +734,18 @@
 
                 loadingOverlay.style.display = 'none';
             }, 500);
-            
             // Fetch and display abnormalities in the CLI Observation tab
-            if (reportData.lpDetails && reportData.lpDetails.length > 0) {
-                const lpId = reportData.lpDetails[0].split(': ')[1]?.trim();
-                fetchAndDisplayAbnormalities(lpId, 'lp-abnormalities-container-cli');
-            } else {
-                const cliAbnormContainer = document.getElementById('lp-abnormalities-container-cli');
-                if (cliAbnormContainer) {
-                     cliAbnormContainer.innerHTML = '<p>LP ID not available to fetch previous records.</p>';
-                }
-            }
+if (reportData.lpDetails && reportData.lpDetails.length > 0) {
+    const lpId = reportData.lpDetails[0].split(': ')[1]?.trim();
+    // Target the new container in the CLI tab
+    fetchAndDisplayAbnormalities(lpId, 'lp-abnormalities-container-cli');
+} else {
+    // Handle case where LP ID might not be available
+    const cliAbnormContainer = document.getElementById('lp-abnormalities-container-cli');
+    if (cliAbnormContainer) {
+         cliAbnormContainer.innerHTML = '<p>LP ID not available to fetch previous records.</p>';
+    }
+}
         }
 
         // Initialize tabs
@@ -774,23 +773,24 @@
                 });
             });
         }
-
-async function fetchAndDisplayAbnormalities(lpId, containerId) { 
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    container.style.textAlign = 'left';
-
-    if (!lpId || lpId === 'N/A') {
-        container.innerHTML = '<p>LP ID not provided.</p>';
-        container.style.textAlign = 'center';
+async function fetchAndDisplayAbnormalities(lpId, containerId) { // Added containerId parameter
+    const container = document.getElementById(containerId); // Use the provided containerId
+    if (!container) {
+        console.error(`Container with ID ${containerId} not found.`);
         return;
     }
 
-    container.innerHTML = 'Loading previous records...';
+    container.style.textAlign = 'left'; // Ensure left alignment
 
-    // Use your Sheet ID and API Key here
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/1Pw0Ai-2G64pFMeQUZegjglySt_lD6qde4EiRTkDOLEs/values/Sheet1?key=AIzaSyChXMJaTllbk8kg5w1bjM06PbbJO5MBeLo`;
+    if (!lpId || lpId === 'N/A') {
+        container.innerHTML = '<p>LP ID not provided.</p>';
+        container.style.textAlign = 'center'; // Center if no ID
+        return;
+    }
+
+    container.innerHTML = 'Loading previous records...'; // Loading message
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/1__RDoiJgxgHaHJo5aMByu-q0xJDXPswQopFo9jYAAdM/values/Sheet1?key=AIzaSyChXMJaTllbk8kg5w1bjM06PbbJO5MBeLo`;
 
     try {
         const response = await fetch(url);
@@ -799,26 +799,30 @@ async function fetchAndDisplayAbnormalities(lpId, containerId) {
         const rows = data.values || [];
 
         let lpFound = false;
-        const abnormalities = []; 
-        globalPreviousAbnormalitiesList = []; 
+        const abnormalities = []; // Stores { abnormality, action, date }
+        globalPreviousAbnormalitiesList = []; // <-- ADD THIS LINE (Resets the global list)
 
-        previousAbnormalityCounts = { bft_nd: 0, bpt_nd: 0, bft_rule: 0, bpt_rule: 0, late_ctrl: 0, overspeed: 0, others: 0 };
+        // Reset global counts (needed if PDF uses this too)
+        previousAbnormalityCounts = { bft_nd: 0, bpt_nd: 0, bft_rule: 0, bpt_rule: 0, late_ctrl: 0, overspeed: 0, others: 0 };
 
-        const DATE_COL = 0;           
-        const LP_ID_COL = 5;          
-        const ABNORMALITY_COL = 39;   
-        const COUNT_COL = 40;         
-        const ACTION_TAKEN_COL = 41;  
+        // Define column indices (confirm these match your sheet structure)
+        const DATE_COL = 0;           // A
+        const LP_ID_COL = 5;          // F
+        const ABNORMALITY_COL = 39;   // AM
+        const COUNT_COL = 40;         // AN
+        const ACTION_TAKEN_COL = 41;  // AP
 
-        const BFT_ND_COL = 42;      
-        const BPT_ND_COL = 43;      
-        const BFT_RULE_COL = 44;    
-        const BPT_RULE_COL = 45;    
-        const LATE_CTRL_COL = 46;   
-        const OVERSPEED_COL = 47;   
-        const OTHERS_COL = 48;      
+        // Summary Columns (confirm indices)
+        const BFT_ND_COL = 42;      // AQ
+        const BPT_ND_COL = 43;      // AR
+        const BFT_RULE_COL = 44;    // AS
+        const BPT_RULE_COL = 45;    // AT
+        const LATE_CTRL_COL = 46;   // AU
+        const OVERSPEED_COL = 47;   // AV
+        const OTHERS_COL = 48;      // AW
 
-        for (let i = 1; i < rows.length; i++) { 
+
+        for (let i = 1; i < rows.length; i++) { // Start from 1 to skip header
              const row = rows[i];
              if (row[LP_ID_COL]?.trim() === lpId) {
                 lpFound = true;
@@ -828,16 +832,16 @@ async function fetchAndDisplayAbnormalities(lpId, containerId) {
                 const rawDateStr = row[DATE_COL] || '';
                 const datePart = rawDateStr.split(' ')[0];
 
-                if (abnormalityText && !isNaN(count) && count > 0) {
-                    const fetchedAbnormality = {
-                        abnormality: abnormalityText,
-                        action: actionTakenText,
-                        date: datePart
-                    };
-                    abnormalities.push(fetchedAbnormality);
-                    globalPreviousAbnormalitiesList.push(fetchedAbnormality); 
-                }
-                
+        if (abnormalityText && !isNaN(count) && count > 0) {
+                    const fetchedAbnormality = {
+                        abnormality: abnormalityText,
+                        action: actionTakenText,
+                        date: datePart
+                    };
+                    abnormalities.push(fetchedAbnormality);
+                    globalPreviousAbnormalitiesList.push(fetchedAbnormality); // <-- ADD THIS LINE
+                }
+                // Sum up previous counts
                 previousAbnormalityCounts.bft_nd += parseInt(row[BFT_ND_COL] || 0);
                 previousAbnormalityCounts.bpt_nd += parseInt(row[BPT_ND_COL] || 0);
                 previousAbnormalityCounts.bft_rule += parseInt(row[BFT_RULE_COL] || 0);
@@ -848,6 +852,8 @@ async function fetchAndDisplayAbnormalities(lpId, containerId) {
              }
         }
 
+        console.log("Fetched Previous Counts (for PDF use):", previousAbnormalityCounts);
+
         if (!lpFound) {
             container.innerHTML = '<p style="font-weight: bold; color: var(--accent-color);">No prior analysis records found for this LP.</p>';
             container.style.textAlign = 'center';
@@ -855,6 +861,7 @@ async function fetchAndDisplayAbnormalities(lpId, containerId) {
             container.innerHTML = '<p style="font-weight: bold; color: var(--success-color);">NIL abnormality found in previous records.</p>';
              container.style.textAlign = 'center';
         } else {
+             // Generate HTML list (same format as index.html)
              const lastTenAbnormalities = abnormalities.slice(-10).reverse();
              let listHtml = '<ol style="padding-left: 20px; margin: 0; font-size: 0.85rem; line-height: 1.6;">';
              lastTenAbnormalities.forEach((item) => {
@@ -873,8 +880,10 @@ async function fetchAndDisplayAbnormalities(lpId, containerId) {
          container.style.textAlign = 'center';
     }
 }
+        // PDF generation
+     // report.html <script> tag ke andar yeh poora function daalein
 
-async function generatePDF() { 
+async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
     console.log("generatePDF started (Clean Layout Version)...");
     loadingOverlay.style.display = 'flex';
     try {
@@ -885,6 +894,7 @@ async function generatePDF() {
         const margin = 15;
         const contentWidth = pageWidth - 2 * margin;
 
+        // --- Helper Functions ---
         const checkPageOverflow = (currentY, spaceNeeded) => {
             if (currentY + spaceNeeded > pageHeight - margin - 10) {
                 doc.addPage();
@@ -903,7 +913,7 @@ async function generatePDF() {
             doc.text('Analysis Through Sanket 1.0', pageWidth / 2, pageHeight - 10, { align: 'center' });
         };
         
-         const addFooterToAllPages = () => { 
+         const addFooterToAllPages = () => { // Helper to add footer to all pages at the end
              const pageCount = doc.internal.getNumberOfPages();
              for (let i = 1; i <= pageCount; i++) {
                  doc.setPage(i);
@@ -915,6 +925,7 @@ async function generatePDF() {
             doc.setFontSize(fontSize);
             return doc.splitTextToSize(String(text || 'N/A'), maxWidth - 2); 
         };
+        // --- End Helper Functions ---
 
         let y = margin;
         // --- PDF Header ---
@@ -949,8 +960,9 @@ async function generatePDF() {
             if(rowHeight < 8) rowHeight = 8;
             y = checkPageOverflow(y, rowHeight);
             
+            // <<< FIX 1: setFillColor (Grayscale) >>>
             const rowColorVal = index % 2 === 0 ? 220 : 240;
-            doc.setFillColor(rowColorVal, rowColorVal, rowColorVal);
+            doc.setFillColor(rowColorVal, rowColorVal, rowColorVal); // 3 args for gray
 
             doc.rect(margin, y, totalTableWidthTrain, rowHeight, 'F');
             doc.setDrawColor(150).setLineWidth(0.1);
@@ -966,86 +978,92 @@ async function generatePDF() {
         });
         y += 10;
 
-       // --- Crew Details ---
-        doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
-        y = checkPageOverflow(y, 10); 
-        doc.text('Crew Details', margin, y);
-        doc.setDrawColor(0, 51, 102).setLineWidth(0.5).line(margin, y + 2, margin + 40, y + 2);
-        y += 10;
+       // --- Crew Details (AUTO-HEIGHT LOGIC) ---
+        doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
+        y = checkPageOverflow(y, 10); // Heading ke liye check
+        doc.text('Crew Details', margin, y);
+        doc.setDrawColor(0, 51, 102).setLineWidth(0.5).line(margin, y + 2, margin + 40, y + 2);
+        y += 10;
 
-        const boxWidth = 80;
-        const basePadding = 15; 
-        const headingHeight = 10;
-        const lineHeight = 7; 
-        doc.setFontSize(10).setFont('helvetica', 'normal'); 
+        const boxWidth = 80;
+        const basePadding = 15; // Upar-neeche padding
+        const headingHeight = 10; // "LP Details" heading ke liye
+        const lineHeight = 7; // 10pt font ke liye line height
+        doc.setFontSize(10).setFont('helvetica', 'normal'); // Calculation ke liye font set karna
 
-        let lpHeight = headingHeight + basePadding;
-        if (reportData.lpDetails && reportData.lpDetails.length > 0) {
-            reportData.lpDetails.forEach(detail => {
-                const lines = doc.splitTextToSize(String(detail), boxWidth - 10);
-                lpHeight += lines.length * lineHeight;
-            });
-        } else {
-            lpHeight += lineHeight; 
-        }
+        // LP Box ki height calculate karna
+        let lpHeight = headingHeight + basePadding;
+        if (reportData.lpDetails && reportData.lpDetails.length > 0) {
+            reportData.lpDetails.forEach(detail => {
+                const lines = doc.splitTextToSize(String(detail), boxWidth - 10); // 5 left + 5 right padding
+                lpHeight += lines.length * lineHeight;
+            });
+        } else {
+            lpHeight += lineHeight; // "No data" ke liye jagah
+        }
 
-        let alpHeight = headingHeight + basePadding;
-        if (reportData.alpDetails && reportData.alpDetails.length > 0) {
-            reportData.alpDetails.forEach(detail => {
-                const lines = doc.splitTextToSize(String(detail), boxWidth - 10); 
-                alpHeight += lines.length * lineHeight;
-            });
-        } else {
-            alpHeight += lineHeight;
-        }
+        // ALP Box ki height calculate karna
+        let alpHeight = headingHeight + basePadding;
+        if (reportData.alpDetails && reportData.alpDetails.length > 0) {
+            reportData.alpDetails.forEach(detail => {
+                const lines = doc.splitTextToSize(String(detail), boxWidth - 10);
+                alpHeight += lines.length * lineHeight;
+            });
+        } else {
+            alpHeight += lineHeight;
+        }
 
-        const boxHeight = Math.max(lpHeight, alpHeight, 40); 
+        const boxHeight = Math.max(lpHeight, alpHeight, 40); // 40px minimum height
 
-        y = checkPageOverflow(y, boxHeight + 15); 
+        // Ab box draw karne ke liye page check karna
+        y = checkPageOverflow(y, boxHeight + 15); // Box + neeche ka gap
 
-        const lpBoxX = margin;
-        const alpBoxX = margin + boxWidth + 20; 
-        doc.setDrawColor(0, 51, 102).setLineWidth(0.5);
-        doc.rect(lpBoxX, y, boxWidth, boxHeight);
-        doc.rect(alpBoxX, y, boxWidth, boxHeight);
+        const lpBoxX = margin;
+        const alpBoxX = margin + boxWidth + 20; // Beech ka gap 20
+        doc.setDrawColor(0, 51, 102).setLineWidth(0.5);
+        doc.rect(lpBoxX, y, boxWidth, boxHeight);
+        doc.rect(alpBoxX, y, boxWidth, boxHeight);
 
-        doc.setFontSize(11).setTextColor(0, 51, 102).setFont('helvetica', 'bold');
-        doc.text('LP Details', lpBoxX + 5, y + 10);
-        doc.text('ALP Details', alpBoxX + 5, y + 10);
+        // Headings daalna
+        doc.setFontSize(11).setTextColor(0, 51, 102).setFont('helvetica', 'bold');
+        doc.text('LP Details', lpBoxX + 5, y + 10);
+        doc.text('ALP Details', alpBoxX + 5, y + 10);
 
-        doc.setFontSize(10).setTextColor(0).setFont('helvetica', 'normal');
-        let y_lp_text = y + 20; 
-        if (reportData.lpDetails && reportData.lpDetails.length > 0) {
-            reportData.lpDetails.forEach(detail => {
-                const lines = doc.splitTextToSize(String(detail), boxWidth - 10);
-                lines.forEach(line => {
-                    doc.text(line, lpBoxX + 5, y_lp_text);
-                    y_lp_text += lineHeight;
-                });
-            });
-        } else {
-            doc.text("No data available", lpBoxX + 5, y_lp_text);
-        }
+        // Content daalna (auto-wrap ke saath)
+        doc.setFontSize(10).setTextColor(0).setFont('helvetica', 'normal');
+        let y_lp_text = y + 20; // Heading ke neeche se start
+        if (reportData.lpDetails && reportData.lpDetails.length > 0) {
+            reportData.lpDetails.forEach(detail => {
+                const lines = doc.splitTextToSize(String(detail), boxWidth - 10);
+                lines.forEach(line => {
+                    doc.text(line, lpBoxX + 5, y_lp_text);
+                    y_lp_text += lineHeight;
+                });
+            });
+        } else {
+            doc.text("No data available", lpBoxX + 5, y_lp_text);
+        }
 
-        let y_alp_text = y + 20;
-        if (reportData.alpDetails && reportData.alpDetails.length > 0) {
-            reportData.alpDetails.forEach(detail => {
-                const lines = doc.splitTextToSize(String(detail), boxWidth - 10);
-                lines.forEach(line => {
-                    doc.text(line, alpBoxX + 5, y_alp_text);
-                    y_alp_text += lineHeight;
-                });
-            });
-        } else {
-            doc.text("No data available", alpBoxX + 5, y_alp_text);
-        }
+        let y_alp_text = y + 20; // Heading ke neeche se start
+        if (reportData.alpDetails && reportData.alpDetails.length > 0) {
+            reportData.alpDetails.forEach(detail => {
+                const lines = doc.splitTextToSize(String(detail), boxWidth - 10);
+                lines.forEach(line => {
+                    doc.text(line, alpBoxX + 5, y_alp_text);
+                    y_alp_text += lineHeight;
+                });
+            });
+        } else {
+            doc.text("No data available", alpBoxX + 5, y_alp_text);
+        }
 
-        y += boxHeight + 10; 
+        y += boxHeight + 10; // Box ke baad 'y' ko update karna
 
-        doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 51, 102);
-        y = checkPageOverflow(y, 10); 
-        doc.text(`Total Stops: ${reportData.stopCount || 0}`, margin, y);
-        y += 15;
+        // Total Stops ko box ke neeche dikhana
+        doc.setFont('helvetica', 'bold').setFontSize(10).setTextColor(0, 51, 102);
+        y = checkPageOverflow(y, 10); // Stop count ke liye jagah check
+        doc.text(`Total Stops: ${reportData.stopCount || 0}`, margin, y);
+        y += 15;
 
         // --- Brake Tests ---
         doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
@@ -1088,6 +1106,7 @@ async function generatePDF() {
             let rowHeight = maxLines * 5.5; if (rowHeight < 8) rowHeight = 8;
             y = checkPageOverflow(y, rowHeight);
             
+            // <<< FIX: setFillColor (Grayscale) >>>
             const rowColorVal = index % 2 === 0 ? 220 : 240;
             doc.setFillColor(rowColorVal, rowColorVal, rowColorVal);
 
@@ -1139,6 +1158,7 @@ async function generatePDF() {
                 let rowHeight = maxLines * 6; if (rowHeight < 8) rowHeight = 8;
                 y = checkPageOverflow(y, rowHeight);
                 
+                // <<< FIX: setFillColor (Grayscale) >>>
                 const rowColorVal = idx % 2 === 0 ? 220 : 240;
                 doc.setFillColor(rowColorVal, rowColorVal, rowColorVal); 
 
@@ -1160,7 +1180,7 @@ async function generatePDF() {
         }
         y += 10;
 
-       // --- Driving Analysis (PDF) ---
+        // --- Driving Analysis ---
         doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
         y = checkPageOverflow(y, 10);
         doc.text('Driving Analysis', margin, y);
@@ -1168,55 +1188,40 @@ async function generatePDF() {
         y += 10;
 
         if (reportData.stops?.length > 0) {
+            // Using autoTable here for simplicity as it's complex
              const drivingBody = reportData.stops.map((stop, index) => {
                  const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
                  const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
                  const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
                  const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
-                 
-                 // Updated Data Array with 11 Speeds
                  return [
-                     stop.group, 
-                     stop.stopLocation, 
-                     stop.timeString.split(' ')[1] || stop.timeString, 
+                     stop.group, stop.stopLocation, stop.timeString, stop.startTiming,
                      (stop.kilometer / 1000).toFixed(2),
-                     stop.speedsBefore[0] || '-', // 2000
-                     stop.speedsBefore[1] || '-', // 1000
-                     stop.speedsBefore[2] || '-', // 800
-                     stop.speedsBefore[3] || '-', // 600
-                     stop.speedsBefore[4] || '-', // 500
-                     stop.speedsBefore[5] || '-', // 400
-                     stop.speedsBefore[6] || '-', // 300
-                     stop.speedsBefore[7] || '-', // 100
-                     stop.speedsBefore[8] || '-', // 50
-                     stop.speedsBefore[9] || '-', // 20
-                     stop.speedsBefore[10]|| '0', // 0
+                     stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'NA',
+                     stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'NA',
+                     stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'NA',
+                     stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'NA',
+                     stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'NA',
                      finalSystemAnalysis,
                      cliRemark
                  ];
              });
-
              doc.autoTable({
-                 startY: y,
-                 head: [['Sr', 'Loc', 'Time', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'Sys', 'Rem']],
-                 body: drivingBody,
-                 theme: 'grid',
-                 headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1, textColor: 255, halign: 'center' },
-                 bodyStyles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak', halign: 'center' },
-                 columnStyles: {
-                     0: { cellWidth: 6 },  // Sr
-                     1: { cellWidth: 15 }, // Loc
-                     2: { cellWidth: 12 }, // Time
-                     3: { cellWidth: 10 }, // Km
-                     // Speed cols (approx 7mm each)
-                     4: { cellWidth: 6 }, 5: { cellWidth: 6 }, 6: { cellWidth: 6 }, 7: { cellWidth: 6 },
-                     8: { cellWidth: 6 }, 9: { cellWidth: 6 }, 10: { cellWidth: 6 }, 11: { cellWidth: 6 },
-                     12: { cellWidth: 6 }, 13: { cellWidth: 6 }, 14: { cellWidth: 6 },
-                     15: { cellWidth: 10 }, // Sys
-                     16: { cellWidth: 'auto' } // Remark
-                 },
-                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
-             });
+                 startY: y,
+                 head: [['Sr', 'Location', 'Stop', 'Start', 'Km', '1000', '800', '500', '100', '50', 'System', 'CLI Remark']],
+                 body: drivingBody,
+                 theme: 'grid',
+                 headStyles: { fillColor: [0, 51, 102], fontSize: 8, cellPadding: 1, textColor: 255 }, // NEW: Font 7 -> 8
+                 bodyStyles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' }, // NEW: Font 7 -> 8
+                 columnStyles: {
+
+                     // NEW: Column widths redistribute kiye gaye (Total 180)
+                     0: { cellWidth: 9 }, 1: { cellWidth: 27 }, 2: { cellWidth: 20 }, 3: { cellWidth: 20 }, // Col 1 ko 28 se 27 kiya
+                     4: { cellWidth: 11 }, 5: { cellWidth: 9 }, 6: { cellWidth: 9 }, 7: { cellWidth: 9 },
+                     8: { cellWidth: 9 }, 9: { cellWidth: 9 }, 10: { cellWidth: 21 }, 11: { cellWidth: 25}
+                 },
+                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
+             });
              y = doc.lastAutoTable.finalY + 10;
         } else {
             doc.setFontSize(10).setFont('helvetica', 'normal');
@@ -1227,39 +1232,53 @@ async function generatePDF() {
 
        // --- Graphs (Original Page Break Logic) ---
 
-        doc.setFontSize(12).setFont('helvetica', 'bold').setTextColor(0);
+        doc.setFontSize(12).setFont('helvetica', 'bold').setTextColor(0);
 
-        const imgWidth = contentWidth * 0.9;
-        const imgHeight = imgWidth * (600 / 400); 
-        const spaceNeededForStopGraph = 10 + 10 + imgHeight + 10; 
-        
-        y = checkPageOverflow(y, spaceNeededForStopGraph); 
-        
-        doc.text('Speed vs. Distance Before Stop', margin, y);
-        doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 60, y + 2);
-        y += 10;
-        if (reportData.stopChartImage) {
-            try {
-                doc.addImage(reportData.stopChartImage, 'PNG', margin + (contentWidth * 0.05), y, imgWidth, imgHeight);
-                y += imgHeight + 10;
+        // --- CHANGE 3.1 START: Graph+Header ke liye total space check ---
+        const imgWidth = contentWidth * 0.9;
+        const imgHeight = imgWidth * (600 / 400); // 1.5 ratio
+        // 10 (text) + 10 (padding) + imgHeight + 10 (bottom padding)
+        const spaceNeededForStopGraph = 10 + 10 + imgHeight + 10; 
+        
+        // y = checkPageOverflow(y, 100); // OLD
+        y = checkPageOverflow(y, spaceNeededForStopGraph); // NEW: Total space check
+        // --- CHANGE 3.1 END ---
+        
+        doc.text('Speed vs. Distance Before Stop', margin, y);
+        doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 60, y + 2);
+        y += 10;
+        if (reportData.stopChartImage) {
+            try {
+                // const imgWidth = contentWidth * 0.9; // Upar define ho gaya
+                // const imgHeight = imgWidth * (600 / 400); // Upar define ho gaya
+                // y = checkPageOverflow(y, imgHeight + 10); // OLD: Yeh check galat tha
+                doc.addImage(reportData.stopChartImage, 'PNG', margin + (contentWidth * 0.05), y, imgWidth, imgHeight);
+                y += imgHeight + 10;
             } catch (e) { console.error("Error adding stop chart:", e); y += 10; }
         } else {
             doc.setFont('helvetica', 'normal').setTextColor(255, 0, 0).setFontSize(10);
             doc.text('No data available for the stop graph.', margin, y); y += 10;
         }
 
-        doc.setFontSize(12).setFont('helvetica', 'bold').setTextColor(0);
-        const spaceNeededForSpeedGraph = 10 + 10 + imgHeight + 10; 
+        // --- CHANGE 3.2 START: Graph+Header ke liye total space check ---
+        doc.setFontSize(12).setFont('helvetica', 'bold').setTextColor(0);
+        // imgWidth aur imgHeight pehle se defined hain
+        const spaceNeededForSpeedGraph = 10 + 10 + imgHeight + 10; 
 
-        y = checkPageOverflow(y, spaceNeededForSpeedGraph);
+        // y = checkPageOverflow(y, 100); // OLD
+        y = checkPageOverflow(y, spaceNeededForSpeedGraph); // NEW: Total space check
+        // --- CHANGE 3.2 END ---
 
-        doc.text('Time vs. Speed Graph', margin, y);
-        doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 60, y + 2);
-        y += 10;
-        if (reportData.speedChartImage) {
-            try {
-                doc.addImage(reportData.speedChartImage, 'PNG', margin + (contentWidth * 0.05), y, imgWidth, imgHeight);
-                y += imgHeight + 10;
+        doc.text('Time vs. Speed Graph', margin, y);
+        doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 60, y + 2);
+        y += 10;
+        if (reportData.speedChartImage) {
+            try {
+                // const imgWidth = contentWidth * 0.9; // Upar defined
+                // const imgHeight = imgWidth * (600 / 400); // Upar defined
+                // y = checkPageOverflow(y, imgHeight + 10); // OLD: Yeh check galat tha
+                doc.addImage(reportData.speedChartImage, 'PNG', margin + (contentWidth * 0.05), y, imgWidth, imgHeight);
+                y += imgHeight + 10;
             } catch (e) { console.error("Error adding speed chart:", e); y += 10; }
         } else {
             doc.setFont('helvetica', 'normal').setTextColor(255, 0, 0).setFontSize(10);
@@ -1287,6 +1306,7 @@ async function generatePDF() {
         doc.setTextColor(0).setFont('helvetica', 'normal');
         reportData.stationStops?.forEach((stop, index) => {
             y = checkPageOverflow(y, 8);
+            // <<< FIX: setFillColor (Grayscale) >>>
             const rowColorVal = index % 2 === 0 ? 220 : 240;
             doc.setFillColor(rowColorVal, rowColorVal, rowColorVal); 
             doc.rect(margin, y, contentWidth, 8, 'F');
@@ -1295,17 +1315,19 @@ async function generatePDF() {
             doc.text(stop.arrival || 'N/A', margin + 80, y + 6);
            doc.text(stop.departure || 'N/A', margin + 130, y + 6);
              y += 8;
-             });
+              });
              y += 10;
 
-            // --- Naya Page for Speed Summaries ---
-            doc.addPage();
-            y = margin;
+            // --- CHANGE 4: Station Timings ke baad naya page ---
+            doc.addPage();
+            y = margin;
+            // --- END CHANGE 4 ---
 
-            // --- Speed Summaries (Using autoTable) ---
-            let finalY_tables = y;
-            doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
-            doc.text('Distance Covered During Speed Range', margin, finalY_tables);
+            // --- Speed Summaries (Using autoTable) ---
+            let finalY_tables = y;
+            doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
+            // finalY_tables = checkPageOverflow(finalY_tables, 10); // OLD: Naye page ke baad redundant
+            doc.text('Distance Covered During Speed Range', margin, finalY_tables);
         finalY_tables += 10;
         
         if (reportData.speedRangeSummary?.summary?.length > 0) {
@@ -1346,6 +1368,7 @@ async function generatePDF() {
         doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 55, y + 2);
         y += 10;
 
+        // Using autoTable for simplicity
         const overspeedBody = reportData.overSpeedDetails?.length > 0
             ? reportData.overSpeedDetails.map(d => [d.section, d.timeRange, d.speedRange])
             : [['No overspeeding found.', '', '']];
@@ -1392,12 +1415,20 @@ async function generatePDF() {
         doc.addPage();
         y = margin;
 
-        let previousAbnormalitiesData = globalPreviousAbnormalitiesList;
-        let fetchedPreviousCounts = previousAbnormalityCounts; 
-        
-        console.log("PDF using pre-fetched abnormalities list:", previousAbnormalitiesData.length);
-        console.log("PDF using pre-fetched abnormality counts:", fetchedPreviousCounts);
-        
+        // --- <<< NEW FEATURE: Fetch & Combine Abnormalities >>> ---
+       // --- <<< MODIFIED FEATURE: Use Global Abnormalities (NO FETCH) >>> ---
+        
+        // We use the data fetched on page load to prevent duplicates
+        let previousAbnormalitiesData = globalPreviousAbnormalitiesList;
+        
+        // We use the counts calculated on page load (this variable is set by fetchAndDisplayAbnormalities)
+        let fetchedPreviousCounts = previousAbnormalityCounts; 
+        
+        console.log("PDF using pre-fetched abnormalities list:", previousAbnormalitiesData.length);
+        console.log("PDF using pre-fetched abnormality counts:", fetchedPreviousCounts);
+        
+        // --- <<< END OF MODIFICATION >>> ---
+
          let currentAbnormalityText = '';
          const checkboxes = document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked');
          checkboxes.forEach((chk, index) => {
@@ -1424,8 +1455,10 @@ async function generatePDF() {
          }
          const neededPrevious = 10 - combinedAbnormalities.length;
          if (neededPrevious > 0) combinedAbnormalities.push(...previousAbnormalitiesData.slice(-neededPrevious));
+         // --- <<< END OF NEW FEATURE LOGIC >>> ---
 
-        // --- Combined List ---
+
+        // --- <<< NEW FEATURE: Display Combined List >>> ---
         doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
         y = checkPageOverflow(y, 10);
         doc.text('Last 10 abnormalities with action taken (including this analysis)', margin, y);
@@ -1471,6 +1504,8 @@ async function generatePDF() {
              doc.text('NIL abnormalities recorded.', margin, y); y += 8;
          }
          y += 10;
+        // --- <<< END OF NEW FEATURE >>> ---
+
 
         // --- OVERALL OBSERVATION ---
         doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
@@ -1492,7 +1527,7 @@ async function generatePDF() {
         // --- Total Abnormality Found ---
         doc.setFont('helvetica', 'bold').setFontSize(12);
         y = checkPageOverflow(y, 10);
-        doc.text('Number of Abnormalities Found (This Analysis)', margin, y); 
+        doc.text('Number of Abnormalities Found (This Analysis)', margin, y); // Title updated
         doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 80, y + 2);
         y += 10;
 
@@ -1511,15 +1546,15 @@ async function generatePDF() {
         y += 10;
         const cliAbnormalities = document.getElementById('cliAbnormalities').value.trim() || 'NIL';
         doc.setFontSize(10).setFont('helvetica', 'normal');
-        doc.splitTextToSize(cliAbnormalities, contentWidth).forEach(line => {
+        doc.splitTextToSize(cliAbnormalities, contentWidth).forEach(line => { // Using default split
             y = checkPageOverflow(y, 6);
             doc.text(line, margin, y);
             y += 6;
         });
         y += 10;
         
-        // --- Historical Abnormalities Profile ---
-        doc.setFont('helvetica', 'bold').setFontSize(12).text('Total Occurrences (Including This Analysis)', margin, y);
+        // --- Historical Abnormalities Profile (Using fetched counts) ---
+        doc.setFont('helvetica', 'bold').setFontSize(12).text('Total Occurrences (Including This Analysis)', margin, y); // Title updated
         y = checkPageOverflow(y, 10);
         y += 10;
 
@@ -1544,13 +1579,14 @@ async function generatePDF() {
         y = doc.lastAutoTable.finalY + 10;
 
 
-        // --- Action Taken ---
+        // --- Action Taken (from Radio Button) ---
         doc.setFont('helvetica', 'bold').setFontSize(12);
         y = checkPageOverflow(y, 10);
-        doc.text('Action Taken (This Analysis)', margin, y);
+        doc.text('Action Taken (This Analysis)', margin, y); // Title updated
         doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 50, y + 2);
         y += 10;
 
+        // Use currentActionTakenText defined earlier
         const actionTakenLines = wrapText(currentActionTakenText, contentWidth - 4, 10);
         doc.setFontSize(10).setFont('helvetica', 'normal');
         actionTakenLines.forEach(line => {
@@ -1559,7 +1595,8 @@ async function generatePDF() {
             y += 8;
         });
         
-        addFooterToAllPages(); 
+        // --- Add Footers to All Pages ---
+        addFooterToAllPages(); // Call this once at the end
 
         // --- Save PDF ---
         doc.save(`SPM_Analysis_${reportData.trainDetails?.find(d => d.label === 'Train Number')?.value || 'Report'}.pdf`);
@@ -1568,13 +1605,13 @@ async function generatePDF() {
     } catch (error) {
         console.error('Error generating PDF:', error);
         alert('Failed to generate PDF. Please check console logs.');
-        throw error;
+        throw error; // Re-throw error so the caller can catch it
     } finally {
+        // loadingOverlay.style.display = 'none'; // <<< Let the CALLER (googlesheet.js) hide this
         console.log("generatePDF finished execution.");
     }
 }
-
-        // ✅ यह सही और संयुक्त (combined) कोड है
+       // ✅ यह सही और संयुक्त (combined) कोड है
         document.addEventListener('DOMContentLoaded', () => {
             try {
                 // 1. रिपोर्ट और टैब को रेंडर करें
@@ -1632,4 +1669,5 @@ async function generatePDF() {
     </script>
      <script src="googlesheet.js"></script>
 </body>
+
 </html>

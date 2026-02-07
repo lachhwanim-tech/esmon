@@ -902,7 +902,7 @@ const finalStops = stops.map(stop => {
         stopLocation = sectionStart && sectionEnd ? `${sectionStart}-${sectionEnd}` : 'Unknown Section';
     }
 
-    const distancesBefore = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20];
+    const distancesBefore = [1000, 800, 500, 100, 50];
     const speedsBefore = distancesBefore.map(targetDistance => {
         let closestRow = null;
         let minDistanceDiff = Infinity;
