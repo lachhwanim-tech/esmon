@@ -691,7 +691,7 @@
                         console.error('Stop Chart canvas not found');
                         document.getElementById('speed-distance').innerHTML += '<p class="error-message">Speed vs. Distance chart canvas not found.</p>';
                     } else {
-                        let stopLabels = reportData.stopChartConfig?.labels || [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 0];
+                        let stopLabels = reportData.stopChartConfig?.labels || [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
                         let stopDatasets = reportData.stopChartConfig?.datasets || [{
                             label: 'Test Stop',
                             data: [30, 28, 25, 20, 15, 10, 8, 5, 3, 1, 0],
@@ -1186,58 +1186,44 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
         }
         y += 10;
 
-        // --- Driving Analysis ---
-        doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(0);
-        y = checkPageOverflow(y, 10);
-        doc.text('Driving Analysis', margin, y);
-        doc.setDrawColor(0, 51, 102).line(margin, y + 2, margin + 40, y + 2);
-        y += 10;
-
-        // --- Driving Analysis (PDF Table Update) ---
+        // --- Driving Analysis (केवल 11-पॉइंट्स वैल्यूज जोड़ी गई हैं) ---
         if (reportData.stops?.length > 0) {
-            const drivingBody = reportData.stops.map((stop, index) => {
-                const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
-                const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
-                const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
-                const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
-                
-                return [
-                    stop.group, 
-                    stop.stopLocation.substring(0,15), // Location को छोटा किया
-                    stop.timeString.split(' ')[1] || stop.timeString, // सिर्फ समय दिखाया
-                    (stop.kilometer / 1000).toFixed(2),
-                    // 11 Speeds
-                    stop.speedsBefore[0] || '0', stop.speedsBefore[1] || '0', stop.speedsBefore[2] || '0',
-                    stop.speedsBefore[3] || '0', stop.speedsBefore[4] || '0', stop.speedsBefore[5] || '0',
-                    stop.speedsBefore[6] || '0', stop.speedsBefore[7] || '0', stop.speedsBefore[8] || '0',
-                    stop.speedsBefore[9] || '0', stop.speedsBefore[10] || '0',
-                    finalSystemAnalysis,
-                    cliRemark
-                ];
-            });
-
-            doc.autoTable({
-                startY: y,
-                head: [['Sr', 'Location', 'Time', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'Analysis', 'Remark']],
-                body: drivingBody,
-                theme: 'grid',
-                headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1 }, // फॉन्ट छोटा किया (6pt)
-                bodyStyles: { fontSize: 6, cellPadding: 1 },
-                columnStyles: {
-                    0: { cellWidth: 5 },  // Sr
-                    1: { cellWidth: 22 }, // Location
-                    2: { cellWidth: 15 }, // Time
-                    3: { cellWidth: 10 }, // Km
-                    // Speed columns (4-14) को बहुत छोटा रखा है
-                    4: { cellWidth: 8 }, 5: { cellWidth: 8 }, 6: { cellWidth: 8 }, 7: { cellWidth: 8 }, 
-                    8: { cellWidth: 8 }, 9: { cellWidth: 8 }, 10: { cellWidth: 8 }, 11: { cellWidth: 8 }, 
-                    12: { cellWidth: 8 }, 13: { cellWidth: 8 }, 14: { cellWidth: 8 },
-                    15: { cellWidth: 15 }, // Analysis
-                    16: { cellWidth: 20 }  // Remark
-                },
-                didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
-            });
-            y = doc.lastAutoTable.finalY + 10;
+             const drivingBody = reportData.stops.map((stop, index) => {
+                 const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
+                 const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
+                 const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
+                 const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
+                 return [
+                     stop.group, stop.stopLocation, stop.timeString, stop.startTiming,
+                     (stop.kilometer / 1000).toFixed(2),
+                     // 11 Speed Points Mapping
+                     stop.speedsBefore[0] || '0', stop.speedsBefore[1] || '0', stop.speedsBefore[2] || '0', 
+                     stop.speedsBefore[3] || '0', stop.speedsBefore[4] || '0', stop.speedsBefore[5] || '0', 
+                     stop.speedsBefore[6] || '0', stop.speedsBefore[7] || '0', stop.speedsBefore[8] || '0', 
+                     stop.speedsBefore[9] || '0', stop.speedsBefore[10] || '0',
+                     finalSystemAnalysis,
+                     cliRemark
+                 ];
+             });
+             doc.autoTable({
+                 startY: y,
+                 // Headers को 11 पॉइंट्स के लिए अपडेट किया
+                 head: [['Sr', 'Location', 'Stop', 'Start', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'System', 'Remark']],
+                 body: drivingBody,
+                 theme: 'grid',
+                 headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1, textColor: 255 },
+                 bodyStyles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
+                 columnStyles: {
+                     // कॉलम विड्थ को 11 पॉइंट्स फिट करने के लिए एडजस्ट किया
+                     0: { cellWidth: 7 }, 1: { cellWidth: 20 }, 2: { cellWidth: 15 }, 3: { cellWidth: 15 }, 
+                     4: { cellWidth: 10 }, 5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 7 },
+                     8: { cellWidth: 7 }, 9: { cellWidth: 7 }, 10: { cellWidth: 7 }, 11: { cellWidth: 7 },
+                     12: { cellWidth: 7 }, 13: { cellWidth: 7 }, 14: { cellWidth: 7 }, 15: { cellWidth: 7 },
+                     16: { cellWidth: 15 }, 17: { cellWidth: 20 }
+                 },
+                 didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
+             });
+             y = doc.lastAutoTable.finalY + 10;
         } else {
             doc.setFontSize(10).setFont('helvetica', 'normal');
             y = checkPageOverflow(y, 10);
