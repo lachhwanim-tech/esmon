@@ -3,25 +3,25 @@ async function sendDataToGoogleSheet(data) {
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Preparing Clean Payload...");
+    console.log("Preparing Payload (Old Structure with Missing Data Fix)...");
 
-    // 1. SUPER-CLEAN GET VALUE FUNCTION
-    // यह फ़ंक्शन डेटा में से कचरा (", \n) हटाकर मैच करेगा
+    // 1. IMPROVED GET VALUE FUNCTION (Cleaning Logic)
+    // यह फ़ंक्शन कोट्स (") और न्यूलाइन (\n) को हटाकर डेटा ढूँढेगा
     const getVal = (arr, labels) => {
         if (!arr || !Array.isArray(arr)) return '';
         const searchLabels = Array.isArray(labels) ? labels : [labels];
         
-        // Helper to clean strings: remove quotes, newlines, trim
+        // Helper to clean strings: remove quotes, newlines, trim, lowercase
         const clean = (str) => String(str || '').replace(/["\n\r]/g, '').trim().toLowerCase();
 
         const item = arr.find(d => {
             if (!d) return false;
-            // Handle Object {label: "...", value: "..."}
+            // Case 1: Object {label: "...", value: "..."}
             if (typeof d === 'object' && d.label) {
                 const cleanLabel = clean(d.label);
                 return searchLabels.some(l => cleanLabel.includes(clean(l)));
             }
-            // Handle String "Loco No: 123"
+            // Case 2: String "Loco No: 123"
             return searchLabels.some(l => clean(d).includes(clean(l)));
         });
 
@@ -34,31 +34,26 @@ async function sendDataToGoogleSheet(data) {
             const strItem = String(item);
             result = strItem.includes(':') ? strItem.split(':')[1] : strItem;
         }
-        // Return cleaned result (remove quotes/newlines from the value too)
+        // Return value cleaned of quotes and newlines
         return String(result).replace(/["\n\r]/g, '').trim();
     };
 
     // --- 2. PREPARE DATA ---
 
-    // A. Manual Date Formatting (No Commas allowed!)
-    const now = new Date();
-    const currentDateTime = 
-        ('0' + now.getDate()).slice(-2) + '/' + 
-        ('0' + (now.getMonth()+1)).slice(-2) + '/' + 
-        now.getFullYear() + ' ' + 
-        ('0' + now.getHours()).slice(-2) + ':' + 
-        ('0' + now.getMinutes()).slice(-2) + ':' + 
-        ('0' + now.getSeconds()).slice(-2);
+    // A. DateTime (Keep Default to maintain your A & B Column split)
+    const currentDateTime = new Date().toLocaleString('en-GB'); 
 
-    // B. From/To Station (With fallback)
+    // B. From/To Station (Priority: Station List from Page 7)
     let fromStn = '';
     let toStn = '';
-    // Try getting from Station List (First/Last)
+    
+    // Try getting from Station List (First & Last)
     if (data.stationStops && Array.isArray(data.stationStops) && data.stationStops.length > 0) {
         fromStn = data.stationStops[0].station || '';
         toStn = data.stationStops[data.stationStops.length - 1].station || '';
     }
-    // If empty, force extract from Route
+    
+    // Fallback: If Station List missing, split Route
     if (!fromStn || !toStn) {
         const route = getVal(data.trainDetails, ['Route', 'Section']);
         if (route && route.includes('-')) {
@@ -68,10 +63,10 @@ async function sendDataToGoogleSheet(data) {
         }
     }
 
-    // C. Journey Date (Logic to find Date in mixed text)
+    // C. Journey Date (Smart Search)
     let journeyDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
     if (!journeyDate || journeyDate.length < 6) {
-        // Fallback: Scan everything for a date pattern
+        // Fallback: Look for date pattern in any text
         const dateItem = data.trainDetails.find(d => {
             const val = typeof d === 'object' ? d.value : String(d);
             return val && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
@@ -82,19 +77,20 @@ async function sendDataToGoogleSheet(data) {
             if (matches) journeyDate = matches[0];
         }
     }
-    // Ensure Date is valid
     if (!journeyDate) journeyDate = new Date().toLocaleDateString('en-GB');
 
-    // D. Extract Other Fields
-    // Use arrays for synonyms to catch variations
+    // D. Extract Other Fields (Using Cleaned getVal)
+    // Note: Added extra synonyms to catch variations
     let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number', 'Train']);
     let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']);
     let section = getVal(data.trainDetails, ['Section']) || getVal(data.trainDetails, ['Route']);
     let rakeType = getVal(data.trainDetails, ['Type of Rake', 'Rake Type', 'Rake']);
     let mps = getVal(data.trainDetails, ['Max Permissible', 'MPS', 'Max Speed']);
     
-    // Fallback for Train/Loco if they are somehow empty but present in header
-    if (!locoNo && data.trainDetails[0]?.value) locoNo = data.trainDetails[0].value; // Blind guess if desperate
+    // Blind backup for Loco/Train if header search fails but data exists in fixed rows
+    // (RTIS often has Loco in Row 1, Train in Row 2)
+    if (!locoNo && data.trainDetails[0]?.value) locoNo = String(data.trainDetails[0].value).replace(/["\n\r]/g, '').trim();
+    if (!trainNo && data.trainDetails[1]?.value) trainNo = String(data.trainDetails[1].value).replace(/["\n\r]/g, '').trim();
 
     let lpId = getVal(data.lpDetails, ['LP ID', 'ID']);
     let lpName = getVal(data.lpDetails, ['LP Name', 'Name']);
@@ -111,7 +107,7 @@ async function sendDataToGoogleSheet(data) {
         avgSpeed = overall.averageSpeed || '0';
     }
 
-    // F. Abnormalities
+    // F. Abnormalities & Routing
     const abn = {
         bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
         bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
@@ -123,7 +119,6 @@ async function sendDataToGoogleSheet(data) {
     };
     const totalAbn = Object.values(abn).reduce((a, b) => a + b, 0);
 
-    // G. Construct Text for PDF/Sheet
     const abnStrings = [];
     if (abn.bft_nd) abnStrings.push("BFT not done");
     if (abn.bpt_nd) abnStrings.push("BPT not done");
@@ -137,21 +132,20 @@ async function sendDataToGoogleSheet(data) {
     const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
     if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = fullAbnormalityText;
 
-    // H. HQ Routing
     let storedHq = localStorage.getItem('currentSessionHq');
     if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
     let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
 
-    // --- 3. FINAL PAYLOAD (Corrected Keys & No Commas) ---
+    // --- 3. FINAL PAYLOAD (Maintain Old Keys, Fix Values Only) ---
     const payload = {
-        dateTime: currentDateTime, // Fixed
+        dateTime: currentDateTime, // Keeps the comma -> Fills Col A & B
         cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '',
         journeyDate: journeyDate,
-        trainNo: trainNo, // Should now be found due to cleaner regex
-        locoNo: locoNo,   // Should now be found
-        fromStn: fromStn,
-        toStn: toStn,
+        trainNo: trainNo, // Now cleaned and found
+        locoNo: locoNo,   // Now cleaned and found
+        fromStn: fromStn, // From Station List
+        toStn: toStn,     // From Station List
         rakeType: rakeType,
         mps: mps,
         section: section,
