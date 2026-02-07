@@ -2,13 +2,13 @@
 
 async function sendDataToGoogleSheet(data) {
     // 1. Primary Apps Script URL (Main Sheet - SPM ANALYSIS BANK)
-    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyjtlUblBEvK-IHarOTh77ntNHQjueOCgqKAF0gefWCjYbejj_oVybT-UKhYsUSwu_AHg/exec';
+    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec';
 
     // 2. Secondary Apps Script URL (Other Sheet - OTHER DIVISION)
-    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbyjtlUblBEvK-IHarOTh77ntNHQjueOCgqKAF0gefWCjYbejj_oVybT-UKhYsUSwu_AHg/exec'; 
+    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
 
     // --- ALLOWED HQ LIST ---
-    const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DRZ', 'DURG'];
+    const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
     // --- START: DATA COLLECTION ---
     data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
@@ -86,24 +86,25 @@ async function sendDataToGoogleSheet(data) {
         targetUrl = otherAppsScriptUrl;
     }
 
-    // --- SEND DATA ---
-    try {
-        await fetch(targetUrl, {
-            method: 'POST',
-            mode: 'no-cors', 
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-
-        console.log('Data sent successfully.');
-
-    } catch (error) {
-        console.error('Error sending data to Google Sheet:', error);
-        alert('Network Error. Data could not be sent.');
-        throw error; 
-    }
+   // --- SEND DATA logic ---
+try {
+    await fetch(targetUrl, {
+        method: 'POST',
+        mode: 'no-cors', 
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        // डेटा को 'payload' के अंदर पैक करें
+        body: JSON.stringify({
+            type: 'data',
+            payload: data
+        })
+    });
+    console.log('Data sent successfully to YOUR database.');
+} catch (error) {
+    console.error('Error:', error);
+    alert('Network Error. Data could not be saved.');
+}
 }
 
 // --- Event Listener ---
