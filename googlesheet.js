@@ -11,6 +11,49 @@ async function sendDataToGoogleSheet(data) {
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
     // --- START: DATA COLLECTION ---
+    // --- START: DATA COLLECTION & MAPPING FIX ---
+
+    // 1. Helper function to extract value from Arrays safely
+    const getVal = (arr, label) => {
+        if (!arr) return '';
+        const item = arr.find(d => d.label === label || d.includes(label));
+        if (!item) return '';
+        // If item is object {label: '...', value: '...'}
+        if (item.value) return item.value;
+        // If item is string "LP ID: 1234"
+        return item.split(':')[1]?.trim() || '';
+    };
+
+    // 2. Map Array Data to Flat Variables (For Sheet1)
+    // Train Details Array se nikalein
+    data.trainNo = getVal(data.trainDetails, 'Train Number');
+    data.locoNo = getVal(data.trainDetails, 'Loco Number');
+    data.fromStn = getVal(data.trainDetails, 'Route')?.split('-')[0] || '';
+    data.toStn = getVal(data.trainDetails, 'Route')?.split('-')[1] || '';
+    data.rakeType = getVal(data.trainDetails, 'Type of Rake');
+    data.mps = getVal(data.trainDetails, 'Max Permissible Speed');
+    data.section = getVal(data.trainDetails, 'Section');
+    data.cliName = getVal(data.trainDetails, 'Analysis By');
+
+    // Crew Details Array se nikalein
+    data.lpId = getVal(data.lpDetails, 'LP ID');
+    data.lpName = getVal(data.lpDetails, 'LP Name');
+    data.lpHq = getVal(data.lpDetails, 'Group CLI'); // Assuming Group CLI implies HQ context or add specific field if needed
+    
+    data.alpId = getVal(data.alpDetails, 'ALP ID');
+    data.alpName = getVal(data.alpDetails, 'ALP Name');
+    data.alpHq = getVal(data.alpDetails, 'Group CLI');
+
+    // Stats
+    data.totalDist = data.speedRangeSummary?.totalDistance || '0';
+    // Calculate Max/Avg Speed from section summary if available
+    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
+        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall'));
+        data.maxSpeed = overall ? overall.maxSpeed : '0';
+        data.avgSpeed = overall ? overall.averageSpeed : '0';
+    }
+
+    // --- END MAPPING FIX ---
     data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
     data.abnormality_bpt_nd = document.getElementById('chk-bpt-nd')?.checked ? 1 : 0;
     data.abnormality_bft_rule = document.getElementById('chk-bft-rule')?.checked ? 1 : 0;
