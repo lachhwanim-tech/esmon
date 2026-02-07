@@ -3,15 +3,16 @@ async function sendDataToGoogleSheet(data) {
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Processing Data for Sheet1...");
+    console.log("Preparing data submission...");
 
-    // 1. ROBUST GET VALUE FUNCTION
+    // 1. ROBUST GET VALUE FUNCTION (Safe for any data type)
     const getVal = (arr, labels) => {
         if (!arr || !Array.isArray(arr)) return '';
         const searchLabels = Array.isArray(labels) ? labels : [labels];
         
         const item = arr.find(d => {
-            if (!d) return false;
+            if (d === null || d === undefined) return false;
+            // Case insensitive search
             if (typeof d === 'object' && d.label) {
                 return searchLabels.some(l => d.label.toLowerCase().includes(l.toLowerCase()));
             }
@@ -20,24 +21,31 @@ async function sendDataToGoogleSheet(data) {
 
         if (!item) return '';
         if (typeof item === 'object') return item.value || '';
+        
+        // Clean up string like "LP ID: 1234" -> "1234"
         const strItem = String(item);
         return strItem.includes(':') ? strItem.split(':')[1]?.trim() || '' : strItem;
     };
 
-    // --- 2. EXTRACT DATA CAREFULLY ---
+    // --- 2. EXTRACT DATA & FIX LOGIC ---
 
-    // A. From Stn & To Stn (LOGIC CHANGED: Based on Station List)
-    let fromStn = '', toStn = '';
+    // A. Fix Date Time Comma Issue (Crucial Fix for Shifting)
+    // Remove the comma between Date and Time so it stays in ONE column
+    const currentDateTime = new Date().toLocaleString('en-GB').replace(',', '');
+
+    // B. From Stn & To Stn (Priority: Station List from Page 7)
+    // RTIS PDFs often show Route: HCBIN-BSP but we need strict From/To
+    let fromStn = '';
+    let toStn = '';
     
-    // Priority 1: Get from Station Timings (First & Last Row)
     if (data.stationStops && Array.isArray(data.stationStops) && data.stationStops.length > 0) {
-        // First Station is FROM
+        // First Station in the list is the actual Start
         fromStn = data.stationStops[0].station || '';
-        // Last Station is TO
+        // Last Station in the list is the actual End
         toStn = data.stationStops[data.stationStops.length - 1].station || '';
     }
 
-    // Priority 2: Fallback to Route splitting ONLY if Station List is missing
+    // Fallback if Station List is empty (Rare case)
     if (!fromStn || !toStn) {
         const route = getVal(data.trainDetails, ['Route', 'Section']);
         if (route && route.includes('-')) {
@@ -47,28 +55,31 @@ async function sendDataToGoogleSheet(data) {
         }
     }
 
-    // B. Train & Loco
-    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number']) || '';
-    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']) || '';
-
-    // C. Journey Date (Critical Fix for RTIS/PDF)
+    // C. Journey Date (Analysis Time Fix)
+    // RTIS uses "Analysis Time: From..." instead of "Journey Date"
     let journeyDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
     if (!journeyDate) {
         // Scan for date in all train details
         const dateItem = data.trainDetails.find(d => {
-            const val = typeof d === 'object' ? d.value : d;
+            const val = typeof d === 'object' ? d.value : String(d);
             return val && (val.includes('/') || val.includes('-')) && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
         });
         
         if (dateItem) {
-            const val = typeof dateItem === 'object' ? dateItem.value : dateItem;
+            const val = typeof dateItem === 'object' ? dateItem.value : String(dateItem);
             const dateMatch = val.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
             if (dateMatch) journeyDate = dateMatch[0];
         }
     }
+    // Final Fallback
     if (!journeyDate) journeyDate = new Date().toLocaleDateString('en-GB');
 
-    // D. Crew
+    // D. Train & Crew Data
+    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number']) || '';
+    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']) || '';
+    let section = getVal(data.trainDetails, ['Section']) || getVal(data.trainDetails, ['Route']) || '';
+
+    // Crew
     let lpId = getVal(data.lpDetails, ['LP ID', 'ID']) || '';
     let lpName = getVal(data.lpDetails, ['LP Name', 'Name']) || '';
     let lpGroup = getVal(data.lpDetails, ['Group', 'HQ', 'CLI']) || '';
@@ -77,7 +88,7 @@ async function sendDataToGoogleSheet(data) {
     let alpName = getVal(data.alpDetails, ['ALP Name', 'Name']) || '';
     let alpGroup = getVal(data.alpDetails, ['Group', 'HQ', 'CLI']) || '';
 
-    // E. Abnormalities (Checkbox Logic)
+    // E. Abnormalities
     const abn = {
         bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
         bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
@@ -87,8 +98,7 @@ async function sendDataToGoogleSheet(data) {
         overspeed: document.getElementById('chk-overspeed')?.checked ? 1 : 0,
         others: document.getElementById('chk-others')?.checked ? 1 : 0
     };
-
-    const totalAbn = abn.bft_nd + abn.bpt_nd + abn.bft_rule + abn.bpt_rule + abn.late_ctrl + abn.overspeed + abn.others;
+    const totalAbn = Object.values(abn).reduce((a, b) => a + b, 0);
 
     const abnStrings = [];
     if (abn.bft_nd) abnStrings.push("BFT not done");
@@ -100,8 +110,8 @@ async function sendDataToGoogleSheet(data) {
     if (abn.others) abnStrings.push(`Other: ${document.getElementById('txt-others')?.value.trim()}`);
     
     const fullAbnormalityText = abnStrings.join('; ') || 'NIL';
-
-    // Update Hidden Field for PDF
+    
+    // Set for PDF
     const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
     if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = fullAbnormalityText;
 
@@ -113,29 +123,27 @@ async function sendDataToGoogleSheet(data) {
         avgSpeed = overall.averageSpeed || '0';
     }
 
-    // G. Generate Unique ID Locally
-    const uniqueTripId = `${lpId}_${trainNo}_${journeyDate.replace(/\//g, '-')}`;
-
     // --- 3. HQ ROUTING ---
     let storedHq = localStorage.getItem('currentSessionHq');
     if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
-    
-    console.log(`Routing HQ: ${currentHq}`);
     let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
 
-    // --- 4. CONSTRUCT FINAL PAYLOAD (Strict Order) ---
+    console.log(`Routing to ${ALLOWED_HQS.includes(currentHq) ? 'PRIMARY' : 'OTHER'} Sheet (HQ: ${currentHq})`);
+
+    // --- 4. FINAL PAYLOAD (Strict Order for Sheet1) ---
     const payload = {
-        dateTime: new Date().toLocaleString('en-GB'),
-        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '', 
+        // Fix: Use cleaned DateTime (No comma)
+        dateTime: currentDateTime, 
+        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '',
         journeyDate: journeyDate,
         trainNo: trainNo,
         locoNo: locoNo,
-        fromStn: fromStn, // Now comes from First Station
-        toStn: toStn,     // Now comes from Last Station
+        fromStn: fromStn, // Logic corrected above
+        toStn: toStn,     // Logic corrected above
         rakeType: getVal(data.trainDetails, ['Rake', 'Type']),
         mps: getVal(data.trainDetails, ['MPS', 'Max', 'Permissible']),
-        section: getVal(data.trainDetails, ['Section']), // This remains NGP-BSP (Fixed Route)
+        section: section,
         
         lpId: lpId,
         lpName: lpName,
@@ -155,7 +163,6 @@ async function sendDataToGoogleSheet(data) {
         cliObs: document.getElementById('cliRemarks')?.value.trim() || 'NIL',
         actionTaken: document.querySelector('input[name="actionTakenRadio"]:checked')?.value || 'NIL',
         
-        // Abnormality Flags
         bftNotDone: abn.bft_nd,
         bptNotDone: abn.bpt_nd,
         bftRule: abn.bft_rule,
@@ -166,9 +173,9 @@ async function sendDataToGoogleSheet(data) {
         totalAbn: totalAbn,
         
         spare: '', 
-        uniqueId: uniqueTripId, 
+        uniqueId: `${lpId}_${trainNo}_${journeyDate.replace(/\//g, '-')}`,
         
-        // Extra Data
+        // Extra Data (For Tab 2)
         stops: data.stops,
         abnormalityText: fullAbnormalityText,
         cliHq: currentHq
