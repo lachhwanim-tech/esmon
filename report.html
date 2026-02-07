@@ -475,37 +475,49 @@
                 </table>
             `;
 
-           // Driving Analysis (Updated to 11-Points)
-            document.getElementById('driving-analysis').innerHTML = `
-                <h2>Driving Analysis (11-Point Breaking Analysis)</h2>
-                ${reportData.stops?.length > 0 ? `
-                    <table class="report-table">
-                        <tr>
-                            <th>Sr. No.</th><th>Stop Location</th><th>Stop Timing</th><th>Km</th>
-                            <th style="background:#eef;">2000m</th><th>1000m</th><th>800m</th>
-                            <th style="background:#eef;">600m</th><th>500m</th><th style="background:#eef;">400m</th>
-                            <th style="background:#eef;">300m</th><th>100m</th><th>50m</th>
-                            <th style="background:#eef;">20m</th><th style="background:#eef;">0m</th>
-                            <th>System Analysis</th><th>CLI Remark</th>
-                        </tr>
-                        ${reportData.stops.map((stop, index) => `
-                            <tr>
-                                <td>${stop.group}</td>
-                                <td>${stop.stopLocation}</td>
-                                <td>${stop.timeString}</td>
-                                <td>${(stop.kilometer / 1000).toFixed(2)}</td>
-                                <td>${stop.speedsBefore[0] || '0'}</td> <td>${stop.speedsBefore[1] || '0'}</td> <td>${stop.speedsBefore[2] || '0'}</td> <td>${stop.speedsBefore[3] || '0'}</td> <td>${stop.speedsBefore[4] || '0'}</td> <td>${stop.speedsBefore[5] || '0'}</td> <td>${stop.speedsBefore[6] || '0'}</td> <td>${stop.speedsBefore[7] || '0'}</td> <td>${stop.speedsBefore[8] || '0'}</td> <td>${stop.speedsBefore[9] || '0'}</td> <td>${stop.speedsBefore[10] || '0'}</td> <td class="system-analysis">
-                                    <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
-                                        <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
-                                        <option value="Late" ${stop.brakingTechnique === 'Late' ? 'selected' : ''}>Late</option>
-                                    </select>
-                                </td>
-                                <td><input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Remark..." style="width: 95%;"></td>
-                            </tr>
-                        `).join('')}
-                    </table>
-                ` : '<p>No stops found.</p>'}
-            `;
+          // Driving Analysis (MODIFIED SECTION)
+        document.getElementById('driving-analysis').innerHTML = `
+              <h2>Driving Analysis</h2>
+    ${reportData.stops?.length > 0 ? `
+        <table class="report-table">
+            <tr>
+                <th>Sr. No.</th><th>Stop Location</th><th>Stop Timing</th><th>Start Timing</th><th>Km</th>
+                <th>2000m</th><th>1000m</th><th>800m</th><th>600m</th><th>500m</th><th>400m</th><th>300m</th><th>100m</th><th>50m</th><th>20m</th><th>0m</th>
+                <th>System Generated Analysis</th>
+                <th>CLI Remark</th>
+            </tr>
+            ${reportData.stops.map((stop, index) => `
+                <tr>
+                    <td>${stop.group}</td>
+                    <td>${stop.stopLocation}</td>
+                    <td>${stop.timeString}</td>
+                    <td>${stop.startTiming}</td>
+                    <td>${(stop.kilometer / 1000).toFixed(2)}</td>
+                    <td>${stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[5] ? parseFloat(stop.speedsBefore[5]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[6] ? parseFloat(stop.speedsBefore[6]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[7] ? parseFloat(stop.speedsBefore[7]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[8] ? parseFloat(stop.speedsBefore[8]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[9] ? parseFloat(stop.speedsBefore[9]).toFixed(0) : 'N/A'}</td>
+                    <td>${stop.speedsBefore[10] ? parseFloat(stop.speedsBefore[10]).toFixed(0) : 'N/A'}</td>
+                    <td class="system-analysis">
+                        <select class="cli-analysis system-analysis-dropdown" data-stop-index="${index}">
+                            <option value="Smooth" ${stop.brakingTechnique === 'Smooth' ? 'selected' : ''}>Smooth</option>
+                            <option value="Late" ${stop.brakingTechnique === 'Late' ? 'selected' : ''}>Late</option>
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="cli-remark-input-row" data-stop-index="${index}" placeholder="Enter remark..." style="width: 95%;">
+                    </td>
+                </tr>
+            `).join('')}
+        </table>
+    ` : '<p>No stops found in the selected range.</p>'}
+        `;
             // Station Timings
             document.getElementById('station-timings').innerHTML = `
                 <h2>Station Timings</h2>
