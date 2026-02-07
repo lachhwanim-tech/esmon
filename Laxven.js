@@ -1230,8 +1230,8 @@ console.log('Final count of stops (duration >= 10s or last stop):', stops.length
                     console.error('Error generating speed chart:', error);
                     alert('Failed to generate speed vs. time graph. Please check console logs.');
                 }
-
-                const distanceLabels = [1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 0];
+                // Line 820 को इससे बदलें:
+const distanceLabels = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
                 const selectedStopsterminatedData = [];
                 const selectedStops = stops.length > 10 
                     ? stops.sort(() => Math.random() - 0.5).slice(0, 10) 
