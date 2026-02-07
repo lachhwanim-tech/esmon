@@ -668,6 +668,7 @@ let processedStops = stops.map((stop, stopIndex) => { // Added stopIndex here
     // Check if this is the last stop in the potential stops array
     const isLastStopOfJourney = (stopIndex === stops.length - 1);
 
+    // --- सुधरा हुआ 11-पॉइंट्स ब्रेकिंग और स्मूथ लॉजिक ---
     const distancesBefore = [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
     const speedsBefore = distancesBefore.map(targetDistance => {
         let closestRow = null;
@@ -683,32 +684,28 @@ let processedStops = stops.map((stop, stopIndex) => { // Added stopIndex here
                 }
             }
         }
-        return closestRow ? closestRow.Speed.toFixed(2) : 'N/A';
+        return closestRow ? closestRow.Speed.toFixed(2) : '0.00';
     });
 
-    // Line 919 ko isse replace karein (Yeh Sahi hai)
-
-// Pehle sabhi speeds ko parse karein
-// --- सुधार: सही इंडेक्स मैपिंग और 5 पैरामीटर का उपयोग ---
     const parsedSpeeds = speedsBefore.map(speed => parseFloat(speed) || 0);
 
-    const s2000 = parsedSpeeds[0]; // 2000m
-    const s1000 = parsedSpeeds[1]; // 1000m
-    const s500  = parsedSpeeds[4]; // 500m (इंडेक्स 4 पर है)
-    const s100  = parsedSpeeds[7]; // 100m (इंडेक्स 7 पर है)
-    const s50   = parsedSpeeds[8]; // 50m  (इंडेक्स 8 पर है)
+    // 11-पॉइंट एरे से सही इंडेक्स मैपिंग (SANKET_DB के लिए)
+    const s2000 = parsedSpeeds[0]; // Index 0 = 2000m
+    const s1000 = parsedSpeeds[1]; // Index 1 = 1000m
+    const s500  = parsedSpeeds[4]; // Index 4 = 500m
+    const s100  = parsedSpeeds[7]; // Index 7 = 100m
+    const s50   = parsedSpeeds[8]; // Index 8 = 50m
 
     let isSmooth = false;
     if (rakeType === 'GOODS') {
-        // Goods के नए नियम: 55, 40, 25, 15, 10
+        // नए नियम (Goods): 2000m(55), 1000m(40), 500m(25), 100m(15), 50m(10)
         isSmooth = (s2000 <= 55 && s1000 <= 40 && s500 <= 25 && s100 <= 15 && s50 <= 10);
     } else { 
-        // Coaching/MEMU के नए नियम: 100, 60, 50, 30, 15
+        // नए नियम (Coaching/MEMU): 2000m(100), 1000m(60), 500m(50), 100m(30), 50m(15)
         isSmooth = (s2000 <= 100 && s1000 <= 60 && s500 <= 50 && s100 <= 30 && s50 <= 15);
     }
     const brakingTechnique = isSmooth ? 'Smooth' : 'Late';
-    // --- सुधार खत्म ---
-
+    // --- सुधार समाप्त ---
     return { ...stop, stopLocation, startTiming: startTiming || 'N/A', duration, speedsBefore, brakingTechnique, isLastStopOfJourney };
 });
 
