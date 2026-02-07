@@ -3,49 +3,62 @@ async function sendDataToGoogleSheet(data) {
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Preparing data submission...");
+    console.log("Preparing Clean Payload...");
 
-    // 1. ROBUST GET VALUE FUNCTION (Safe for any data type)
+    // 1. SUPER-CLEAN GET VALUE FUNCTION
+    // यह फ़ंक्शन डेटा में से कचरा (", \n) हटाकर मैच करेगा
     const getVal = (arr, labels) => {
         if (!arr || !Array.isArray(arr)) return '';
         const searchLabels = Array.isArray(labels) ? labels : [labels];
         
+        // Helper to clean strings: remove quotes, newlines, trim
+        const clean = (str) => String(str || '').replace(/["\n\r]/g, '').trim().toLowerCase();
+
         const item = arr.find(d => {
-            if (d === null || d === undefined) return false;
-            // Case insensitive search
+            if (!d) return false;
+            // Handle Object {label: "...", value: "..."}
             if (typeof d === 'object' && d.label) {
-                return searchLabels.some(l => d.label.toLowerCase().includes(l.toLowerCase()));
+                const cleanLabel = clean(d.label);
+                return searchLabels.some(l => cleanLabel.includes(clean(l)));
             }
-            return searchLabels.some(l => String(d).toLowerCase().includes(l.toLowerCase()));
+            // Handle String "Loco No: 123"
+            return searchLabels.some(l => clean(d).includes(clean(l)));
         });
 
         if (!item) return '';
-        if (typeof item === 'object') return item.value || '';
-        
-        // Clean up string like "LP ID: 1234" -> "1234"
-        const strItem = String(item);
-        return strItem.includes(':') ? strItem.split(':')[1]?.trim() || '' : strItem;
+
+        let result = '';
+        if (typeof item === 'object') {
+            result = item.value || '';
+        } else {
+            const strItem = String(item);
+            result = strItem.includes(':') ? strItem.split(':')[1] : strItem;
+        }
+        // Return cleaned result (remove quotes/newlines from the value too)
+        return String(result).replace(/["\n\r]/g, '').trim();
     };
 
-    // --- 2. EXTRACT DATA & FIX LOGIC ---
+    // --- 2. PREPARE DATA ---
 
-    // A. Fix Date Time Comma Issue (Crucial Fix for Shifting)
-    // Remove the comma between Date and Time so it stays in ONE column
-    const currentDateTime = new Date().toLocaleString('en-GB').replace(',', '');
+    // A. Manual Date Formatting (No Commas allowed!)
+    const now = new Date();
+    const currentDateTime = 
+        ('0' + now.getDate()).slice(-2) + '/' + 
+        ('0' + (now.getMonth()+1)).slice(-2) + '/' + 
+        now.getFullYear() + ' ' + 
+        ('0' + now.getHours()).slice(-2) + ':' + 
+        ('0' + now.getMinutes()).slice(-2) + ':' + 
+        ('0' + now.getSeconds()).slice(-2);
 
-    // B. From Stn & To Stn (Priority: Station List from Page 7)
-    // RTIS PDFs often show Route: HCBIN-BSP but we need strict From/To
+    // B. From/To Station (With fallback)
     let fromStn = '';
     let toStn = '';
-    
+    // Try getting from Station List (First/Last)
     if (data.stationStops && Array.isArray(data.stationStops) && data.stationStops.length > 0) {
-        // First Station in the list is the actual Start
         fromStn = data.stationStops[0].station || '';
-        // Last Station in the list is the actual End
         toStn = data.stationStops[data.stationStops.length - 1].station || '';
     }
-
-    // Fallback if Station List is empty (Rare case)
+    // If empty, force extract from Route
     if (!fromStn || !toStn) {
         const route = getVal(data.trainDetails, ['Route', 'Section']);
         if (route && route.includes('-')) {
@@ -55,40 +68,50 @@ async function sendDataToGoogleSheet(data) {
         }
     }
 
-    // C. Journey Date (Analysis Time Fix)
-    // RTIS uses "Analysis Time: From..." instead of "Journey Date"
+    // C. Journey Date (Logic to find Date in mixed text)
     let journeyDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
-    if (!journeyDate) {
-        // Scan for date in all train details
+    if (!journeyDate || journeyDate.length < 6) {
+        // Fallback: Scan everything for a date pattern
         const dateItem = data.trainDetails.find(d => {
             const val = typeof d === 'object' ? d.value : String(d);
-            return val && (val.includes('/') || val.includes('-')) && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
+            return val && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
         });
-        
         if (dateItem) {
             const val = typeof dateItem === 'object' ? dateItem.value : String(dateItem);
-            const dateMatch = val.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
-            if (dateMatch) journeyDate = dateMatch[0];
+            const matches = val.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+            if (matches) journeyDate = matches[0];
         }
     }
-    // Final Fallback
+    // Ensure Date is valid
     if (!journeyDate) journeyDate = new Date().toLocaleDateString('en-GB');
 
-    // D. Train & Crew Data
-    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number']) || '';
-    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']) || '';
-    let section = getVal(data.trainDetails, ['Section']) || getVal(data.trainDetails, ['Route']) || '';
-
-    // Crew
-    let lpId = getVal(data.lpDetails, ['LP ID', 'ID']) || '';
-    let lpName = getVal(data.lpDetails, ['LP Name', 'Name']) || '';
-    let lpGroup = getVal(data.lpDetails, ['Group', 'HQ', 'CLI']) || '';
+    // D. Extract Other Fields
+    // Use arrays for synonyms to catch variations
+    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number', 'Train']);
+    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']);
+    let section = getVal(data.trainDetails, ['Section']) || getVal(data.trainDetails, ['Route']);
+    let rakeType = getVal(data.trainDetails, ['Type of Rake', 'Rake Type', 'Rake']);
+    let mps = getVal(data.trainDetails, ['Max Permissible', 'MPS', 'Max Speed']);
     
-    let alpId = getVal(data.alpDetails, ['ALP ID', 'ID']) || '';
-    let alpName = getVal(data.alpDetails, ['ALP Name', 'Name']) || '';
-    let alpGroup = getVal(data.alpDetails, ['Group', 'HQ', 'CLI']) || '';
+    // Fallback for Train/Loco if they are somehow empty but present in header
+    if (!locoNo && data.trainDetails[0]?.value) locoNo = data.trainDetails[0].value; // Blind guess if desperate
 
-    // E. Abnormalities
+    let lpId = getVal(data.lpDetails, ['LP ID', 'ID']);
+    let lpName = getVal(data.lpDetails, ['LP Name', 'Name']);
+    let lpGroup = getVal(data.lpDetails, ['Group', 'HQ']);
+    let alpId = getVal(data.alpDetails, ['ALP ID', 'ID']);
+    let alpName = getVal(data.alpDetails, ['ALP Name', 'Name']);
+    let alpGroup = getVal(data.alpDetails, ['Group', 'HQ']);
+
+    // E. Stats
+    let maxSpeed = '0', avgSpeed = '0';
+    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
+        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
+        maxSpeed = overall.maxSpeed || '0';
+        avgSpeed = overall.averageSpeed || '0';
+    }
+
+    // F. Abnormalities
     const abn = {
         bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
         bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
@@ -100,6 +123,7 @@ async function sendDataToGoogleSheet(data) {
     };
     const totalAbn = Object.values(abn).reduce((a, b) => a + b, 0);
 
+    // G. Construct Text for PDF/Sheet
     const abnStrings = [];
     if (abn.bft_nd) abnStrings.push("BFT not done");
     if (abn.bpt_nd) abnStrings.push("BPT not done");
@@ -108,41 +132,28 @@ async function sendDataToGoogleSheet(data) {
     if (abn.late_ctrl) abnStrings.push(`Late Ctrl: ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
     if (abn.overspeed) abnStrings.push(`Overspeed: ${document.getElementById('txt-overspeed')?.value.trim()}`);
     if (abn.others) abnStrings.push(`Other: ${document.getElementById('txt-others')?.value.trim()}`);
-    
     const fullAbnormalityText = abnStrings.join('; ') || 'NIL';
     
-    // Set for PDF
     const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
     if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = fullAbnormalityText;
 
-    // F. Stats
-    let maxSpeed = '0', avgSpeed = '0';
-    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
-        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
-        maxSpeed = overall.maxSpeed || '0';
-        avgSpeed = overall.averageSpeed || '0';
-    }
-
-    // --- 3. HQ ROUTING ---
+    // H. HQ Routing
     let storedHq = localStorage.getItem('currentSessionHq');
     if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
     let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
 
-    console.log(`Routing to ${ALLOWED_HQS.includes(currentHq) ? 'PRIMARY' : 'OTHER'} Sheet (HQ: ${currentHq})`);
-
-    // --- 4. FINAL PAYLOAD (Strict Order for Sheet1) ---
+    // --- 3. FINAL PAYLOAD (Corrected Keys & No Commas) ---
     const payload = {
-        // Fix: Use cleaned DateTime (No comma)
-        dateTime: currentDateTime, 
+        dateTime: currentDateTime, // Fixed
         cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '',
         journeyDate: journeyDate,
-        trainNo: trainNo,
-        locoNo: locoNo,
-        fromStn: fromStn, // Logic corrected above
-        toStn: toStn,     // Logic corrected above
-        rakeType: getVal(data.trainDetails, ['Rake', 'Type']),
-        mps: getVal(data.trainDetails, ['MPS', 'Max', 'Permissible']),
+        trainNo: trainNo, // Should now be found due to cleaner regex
+        locoNo: locoNo,   // Should now be found
+        fromStn: fromStn,
+        toStn: toStn,
+        rakeType: rakeType,
+        mps: mps,
         section: section,
         
         lpId: lpId,
@@ -175,13 +186,12 @@ async function sendDataToGoogleSheet(data) {
         spare: '', 
         uniqueId: `${lpId}_${trainNo}_${journeyDate.replace(/\//g, '-')}`,
         
-        // Extra Data (For Tab 2)
         stops: data.stops,
         abnormalityText: fullAbnormalityText,
         cliHq: currentHq
     };
 
-    // --- 5. SEND ---
+    // --- 4. SEND ---
     try {
         await fetch(targetUrl, {
             method: 'POST',
@@ -208,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (downloadButton) {
         downloadButton.addEventListener('click', async () => { 
             let isValid = true;
-            
             document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
                 const textId = chk.dataset.textId;
                 if (textId) {
@@ -219,12 +228,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            
             if (!document.querySelector('input[name="actionTakenRadio"]:checked')) {
                  alert('Please select an option for "Action Taken".');
                  isValid = false;
             }
-
             if (!isValid) return;
 
             downloadButton.disabled = true;
@@ -247,7 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (typeof generatePDF === 'function') {
                         await generatePDF(); 
                         alert('Data submitted and report generated. Redirecting...');
-                        
                         localStorage.removeItem('spmReportData');
                         localStorage.removeItem('currentSessionHq');
                         localStorage.removeItem('isOtherCliMode');
