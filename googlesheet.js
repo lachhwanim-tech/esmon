@@ -1,5 +1,3 @@
-// googlesheet.js - Fixed: Reads HQ from LocalStorage
-
 async function sendDataToGoogleSheet(data) {
     // 1. Primary Apps Script URL (Main Sheet - SPM ANALYSIS BANK)
     const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec';
@@ -10,26 +8,53 @@ async function sendDataToGoogleSheet(data) {
     // --- ALLOWED HQ LIST ---
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    // --- START: DATA COLLECTION ---
-    // --- START: DATA COLLECTION & MAPPING FIX ---
+    console.log("Preparing data for submission...");
 
-    // 1. Helper function to extract value from Arrays safely
+    // --- START: DATA COLLECTION & MAPPING FIX (CORRECTED) ---
+
+    // 1. Helper function to extract value from Arrays safely (Bug Fixed)
     const getVal = (arr, label) => {
-        if (!arr) return '';
-        const item = arr.find(d => d.label === label || d.includes(label));
+        if (!arr || !Array.isArray(arr)) return '';
+        
+        // Find the item that matches the label
+        const item = arr.find(d => {
+            // Case 1: Item is an object (e.g., Train Details)
+            if (typeof d === 'object' && d !== null && d.label) {
+                return d.label === label;
+            }
+            // Case 2: Item is a string (e.g., LP Details "LP ID: 1234")
+            if (typeof d === 'string') {
+                return d.includes(label);
+            }
+            return false;
+        });
+
         if (!item) return '';
-        // If item is object {label: '...', value: '...'}
-        if (item.value) return item.value;
-        // If item is string "LP ID: 1234"
-        return item.split(':')[1]?.trim() || '';
+
+        // Extract value based on type
+        if (typeof item === 'object') {
+            return item.value || '';
+        } else if (typeof item === 'string') {
+            return item.split(':')[1]?.trim() || '';
+        }
+        return '';
     };
 
     // 2. Map Array Data to Flat Variables (For Sheet1)
     // Train Details Array se nikalein
     data.trainNo = getVal(data.trainDetails, 'Train Number');
     data.locoNo = getVal(data.trainDetails, 'Loco Number');
-    data.fromStn = getVal(data.trainDetails, 'Route')?.split('-')[0] || '';
-    data.toStn = getVal(data.trainDetails, 'Route')?.split('-')[1] || '';
+    
+    // Route se From/To nikalne ka logic
+    const route = getVal(data.trainDetails, 'Route');
+    if (route && route.includes('-')) {
+        data.fromStn = route.split('-')[0].trim();
+        data.toStn = route.split('-')[1].trim();
+    } else {
+        data.fromStn = '';
+        data.toStn = '';
+    }
+
     data.rakeType = getVal(data.trainDetails, 'Type of Rake');
     data.mps = getVal(data.trainDetails, 'Max Permissible Speed');
     data.section = getVal(data.trainDetails, 'Section');
@@ -38,22 +63,27 @@ async function sendDataToGoogleSheet(data) {
     // Crew Details Array se nikalein
     data.lpId = getVal(data.lpDetails, 'LP ID');
     data.lpName = getVal(data.lpDetails, 'LP Name');
-    data.lpHq = getVal(data.lpDetails, 'Group CLI'); // Assuming Group CLI implies HQ context or add specific field if needed
+    data.lpGroup = getVal(data.lpDetails, 'Group CLI'); 
     
     data.alpId = getVal(data.alpDetails, 'ALP ID');
     data.alpName = getVal(data.alpDetails, 'ALP Name');
-    data.alpHq = getVal(data.alpDetails, 'Group CLI');
+    data.alpGroup = getVal(data.alpDetails, 'Group CLI');
 
     // Stats
     data.totalDist = data.speedRangeSummary?.totalDistance || '0';
-    // Calculate Max/Avg Speed from section summary if available
+    // Calculate Max/Avg Speed from section summary
     if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
         const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall'));
         data.maxSpeed = overall ? overall.maxSpeed : '0';
         data.avgSpeed = overall ? overall.averageSpeed : '0';
+    } else {
+        data.maxSpeed = '0';
+        data.avgSpeed = '0';
     }
 
     // --- END MAPPING FIX ---
+
+    // --- CONTINUE DATA COLLECTION ---
     data.abnormality_bft_nd = document.getElementById('chk-bft-nd')?.checked ? 1 : 0;
     data.abnormality_bpt_nd = document.getElementById('chk-bpt-nd')?.checked ? 1 : 0;
     data.abnormality_bft_rule = document.getElementById('chk-bft-rule')?.checked ? 1 : 0;
@@ -94,33 +124,26 @@ async function sendDataToGoogleSheet(data) {
         });
     }
     
+    // Heavy images delete karke payload halka karein
     delete data.speedChartConfig;
     delete data.stopChartConfig;
     delete data.speedChartImage;
     delete data.stopChartImage;
 
     // --- CRITICAL FIX: READ HQ FROM STORAGE ---
-    
-    // 1. Try LocalStorage (Saved during Submit)
     let storedHq = localStorage.getItem('currentSessionHq');
     
-    // 2. Try DOM (If still visible)
+    // Try DOM as backup
     if (!storedHq && document.getElementById('cliHqDisplay')) {
         storedHq = document.getElementById('cliHqDisplay').value;
     }
 
-    // 3. Normalize
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
-    
-    // Update data payload
     data.cliHq = currentHq;
 
-    // Debugging
     console.log(`Final HQ for Routing: [${currentHq}]`);
 
     let targetUrl = primaryAppsScriptUrl;
-
-    // 4. CHECK LOGIC
     if (ALLOWED_HQS.includes(currentHq)) {
         console.log(`MATCH: Sending to PRIMARY Sheet.`);
         targetUrl = primaryAppsScriptUrl;
@@ -130,96 +153,23 @@ async function sendDataToGoogleSheet(data) {
     }
 
    // --- SEND DATA logic ---
-try {
-    await fetch(targetUrl, {
-        method: 'POST',
-        mode: 'no-cors', 
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        // डेटा को 'payload' के अंदर पैक करें
-        body: JSON.stringify({
-            type: 'data',
-            payload: data
-        })
-    });
-    console.log('Data sent successfully to YOUR database.');
-} catch (error) {
-    console.error('Error:', error);
-    alert('Network Error. Data could not be saved.');
-}
-}
-
-// --- Event Listener ---
-document.addEventListener('DOMContentLoaded', () => {
-    const downloadButton = document.getElementById('downloadReport');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-
-    if (downloadButton) {
-        downloadButton.addEventListener('click', async () => { 
-            let isValid = true;
-            let firstInvalidElement = null;
-
-            document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
-                const textId = chk.dataset.textId;
-                if (textId) {
-                    const textField = document.getElementById(textId);
-                    if (!textField || !textField.value.trim()) {
-                        alert(`Please enter a remark for the selected abnormality.`);
-                        if (textField && !firstInvalidElement) firstInvalidElement = textField;
-                        isValid = false;
-                    }
-                }
-            });
-            
-            const actionSelected = document.querySelector('input[name="actionTakenRadio"]:checked');
-            if (!actionSelected) {
-                 alert('Please select an option for "Action Taken".');
-                 isValid = false;
-            }
-
-            if (!isValid) return;
-
-            downloadButton.disabled = true;
-            downloadButton.textContent = 'Processing...';
-            if(loadingOverlay) loadingOverlay.style.display = 'flex';
-
-            const reportDataString = localStorage.getItem('spmReportData');
-            if (reportDataString) {
-                let reportData;
-                try {
-                     reportData = JSON.parse(reportDataString);
-                } catch(e) {
-                     alert("Error retrieving data. Refresh page.");
-                     if(loadingOverlay) loadingOverlay.style.display = 'none';
-                     return;
-                }
-
-                try {
-                    await sendDataToGoogleSheet(reportData);
-                    
-                    if (typeof generatePDF === 'function') {
-                        await generatePDF(); 
-                        alert('Data submitted and report generated. Redirecting...');
-                        
-                        localStorage.removeItem('spmReportData');
-                        localStorage.removeItem('currentSessionHq'); // Clean up HQ
-                        localStorage.removeItem('isOtherCliMode');
-                        localStorage.removeItem('customCliName');
-                        window.location.href = 'index.html'; 
-                    } else {
-                        alert('PDF function missing.');
-                    }
-                } catch (error) { 
-                    console.error("Error:", error);
-                    alert("Error during submission.");
-                    downloadButton.disabled = false;
-                    if(loadingOverlay) loadingOverlay.style.display = 'none';
-                }
-            } else {
-                alert('No report data found.');
-                if(loadingOverlay) loadingOverlay.style.display = 'none';
-            }
-        }); 
+    try {
+        await fetch(targetUrl, {
+            method: 'POST',
+            mode: 'no-cors', 
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'data',
+                payload: data
+            })
+        });
+        console.log('Data sent successfully to YOUR database.');
+    } catch (error) {
+        console.error('Error in fetch:', error);
+        alert('Network Error. Data could not be saved.');
+        // Re-throw so report.html knows it failed
+        throw error; 
     }
-});
+}
