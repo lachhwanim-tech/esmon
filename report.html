@@ -691,7 +691,8 @@
                         console.error('Stop Chart canvas not found');
                         document.getElementById('speed-distance').innerHTML += '<p class="error-message">Speed vs. Distance chart canvas not found.</p>';
                     } else {
-                        let stopLabels = reportData.stopChartConfig?.labels || [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
+                        // इसे खोजें और केवल एरे (Array) की वैल्यूज अपडेट करें
+let stopLabels = reportData.stopChartConfig?.labels || [2000, 1000, 800, 600, 500, 400, 300, 100, 50, 20, 0];
                         let stopDatasets = reportData.stopChartConfig?.datasets || [{
                             label: 'Test Stop',
                             data: [30, 28, 25, 20, 15, 10, 8, 5, 3, 1, 0],
@@ -1193,10 +1194,10 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
                  const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
                  const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
                  const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
-                 return [
+                return [
                      stop.group, stop.stopLocation, stop.timeString, stop.startTiming,
                      (stop.kilometer / 1000).toFixed(2),
-                     // 11 Speed Points Mapping (Values 0 to 10)
+                     // 11 Speed Points Mapping (इंडेक्स 0 से 10)
                      stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : '0',
                      stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : '0',
                      stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : '0',
@@ -1214,19 +1215,18 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
              });
              doc.autoTable({
                  startY: y,
-                 // Headers को 11 पॉइंट्स के लिए अपडेट किया
+                 // 11 पॉइंट्स के लिए हेडर्स को अपडेट किया
                  head: [['Sr', 'Location', 'Stop', 'Start', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'System', 'Remark']],
                  body: drivingBody,
                  theme: 'grid',
                  headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1, textColor: 255 },
                  bodyStyles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
                  columnStyles: {
-                     // कॉलम विड्थ को 11 पॉइंट्स फिट करने के लिए एडजस्ट किया
-                     0: { cellWidth: 7 }, 1: { cellWidth: 20 }, 2: { cellWidth: 15 }, 3: { cellWidth: 15 }, 
-                     4: { cellWidth: 10 }, 5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 7 },
-                     8: { cellWidth: 7 }, 9: { cellWidth: 7 }, 10: { cellWidth: 7 }, 11: { cellWidth: 7 },
-                     12: { cellWidth: 7 }, 13: { cellWidth: 7 }, 14: { cellWidth: 7 }, 15: { cellWidth: 7 },
-                     16: { cellWidth: 15 }, 17: { cellWidth: 20 }
+                     // विड्थ को 11 पॉइंट्स फिट करने के लिए एडजस्ट किया गया
+                     0: { cellWidth: 7 }, 1: { cellWidth: 20 }, 2: { cellWidth: 15 }, 3: { cellWidth: 15 }, 4: { cellWidth: 10 },
+                     5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 7 }, 8: { cellWidth: 7 }, 9: { cellWidth: 7 },
+                     10: { cellWidth: 7 }, 11: { cellWidth: 7 }, 12: { cellWidth: 7 }, 13: { cellWidth: 7 }, 14: { cellWidth: 7 },
+                     15: { cellWidth: 7 }, 16: { cellWidth: 15 }, 17: { cellWidth: 20 }
                  },
                  didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
              });
