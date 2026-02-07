@@ -3,7 +3,7 @@ async function sendDataToGoogleSheet(data) {
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Preparing ordered data for submission...");
+    console.log("Processing Data for Sheet1...");
 
     // 1. ROBUST GET VALUE FUNCTION
     const getVal = (arr, labels) => {
@@ -11,7 +11,7 @@ async function sendDataToGoogleSheet(data) {
         const searchLabels = Array.isArray(labels) ? labels : [labels];
         
         const item = arr.find(d => {
-            if (d === null || d === undefined) return false;
+            if (!d) return false;
             if (typeof d === 'object' && d.label) {
                 return searchLabels.some(l => d.label.toLowerCase().includes(l.toLowerCase()));
             }
@@ -24,30 +24,60 @@ async function sendDataToGoogleSheet(data) {
         return strItem.includes(':') ? strItem.split(':')[1]?.trim() || '' : strItem;
     };
 
-    // 2. EXTRACTION LOGIC
-    // Route Splitter
+    // --- 2. EXTRACT DATA CAREFULLY ---
+
+    // A. From Stn & To Stn (LOGIC CHANGED: Based on Station List)
     let fromStn = '', toStn = '';
-    const route = getVal(data.trainDetails, ['Route', 'Section']);
-    if (route && route.includes('-')) {
-        [fromStn, toStn] = route.split('-').map(s => s.trim());
+    
+    // Priority 1: Get from Station Timings (First & Last Row)
+    if (data.stationStops && Array.isArray(data.stationStops) && data.stationStops.length > 0) {
+        // First Station is FROM
+        fromStn = data.stationStops[0].station || '';
+        // Last Station is TO
+        toStn = data.stationStops[data.stationStops.length - 1].station || '';
     }
 
-    // Date Logic
-    let jDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
-    if (!jDate && data.trainDetails) {
-        const dateItem = data.trainDetails.find(d => d.value && (d.value.includes('/') || d.value.includes('-')));
-        if(dateItem) jDate = dateItem.value.split(' ')[0];
+    // Priority 2: Fallback to Route splitting ONLY if Station List is missing
+    if (!fromStn || !toStn) {
+        const route = getVal(data.trainDetails, ['Route', 'Section']);
+        if (route && route.includes('-')) {
+            const parts = route.split('-');
+            if(!fromStn) fromStn = parts[0].trim();
+            if(!toStn) toStn = parts[1].trim();
+        }
     }
 
-    // Stats
-    let maxSpeed = '0', avgSpeed = '0';
-    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
-        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
-        maxSpeed = overall.maxSpeed || '0';
-        avgSpeed = overall.averageSpeed || '0';
-    }
+    // B. Train & Loco
+    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number']) || '';
+    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']) || '';
 
-    // Abnormalities
+    // C. Journey Date (Critical Fix for RTIS/PDF)
+    let journeyDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
+    if (!journeyDate) {
+        // Scan for date in all train details
+        const dateItem = data.trainDetails.find(d => {
+            const val = typeof d === 'object' ? d.value : d;
+            return val && (val.includes('/') || val.includes('-')) && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
+        });
+        
+        if (dateItem) {
+            const val = typeof dateItem === 'object' ? dateItem.value : dateItem;
+            const dateMatch = val.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+            if (dateMatch) journeyDate = dateMatch[0];
+        }
+    }
+    if (!journeyDate) journeyDate = new Date().toLocaleDateString('en-GB');
+
+    // D. Crew
+    let lpId = getVal(data.lpDetails, ['LP ID', 'ID']) || '';
+    let lpName = getVal(data.lpDetails, ['LP Name', 'Name']) || '';
+    let lpGroup = getVal(data.lpDetails, ['Group', 'HQ', 'CLI']) || '';
+    
+    let alpId = getVal(data.alpDetails, ['ALP ID', 'ID']) || '';
+    let alpName = getVal(data.alpDetails, ['ALP Name', 'Name']) || '';
+    let alpGroup = getVal(data.alpDetails, ['Group', 'HQ', 'CLI']) || '';
+
+    // E. Abnormalities (Checkbox Logic)
     const abn = {
         bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
         bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
@@ -58,45 +88,65 @@ async function sendDataToGoogleSheet(data) {
         others: document.getElementById('chk-others')?.checked ? 1 : 0
     };
 
+    const totalAbn = abn.bft_nd + abn.bpt_nd + abn.bft_rule + abn.bpt_rule + abn.late_ctrl + abn.overspeed + abn.others;
+
     const abnStrings = [];
     if (abn.bft_nd) abnStrings.push("BFT not done");
     if (abn.bpt_nd) abnStrings.push("BPT not done");
-    if (abn.bft_rule) abnStrings.push(`BFT not done as per rule:- ${document.getElementById('txt-bft-rule')?.value.trim()}`);
-    if (abn.bpt_rule) abnStrings.push(`BPT not done as per rule:- ${document.getElementById('txt-bpt-rule')?.value.trim()}`);
-    if (abn.late_ctrl) abnStrings.push(`Late Controlling:- ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
-    if (abn.overspeed) abnStrings.push(`Over speeding:- ${document.getElementById('txt-overspeed')?.value.trim()}`);
-    if (abn.others) abnStrings.push(`Other Abnormalities:- ${document.getElementById('txt-others')?.value.trim()}`);
+    if (abn.bft_rule) abnStrings.push(`BFT Rule: ${document.getElementById('txt-bft-rule')?.value.trim()}`);
+    if (abn.bpt_rule) abnStrings.push(`BPT Rule: ${document.getElementById('txt-bpt-rule')?.value.trim()}`);
+    if (abn.late_ctrl) abnStrings.push(`Late Ctrl: ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
+    if (abn.overspeed) abnStrings.push(`Overspeed: ${document.getElementById('txt-overspeed')?.value.trim()}`);
+    if (abn.others) abnStrings.push(`Other: ${document.getElementById('txt-others')?.value.trim()}`);
+    
+    const fullAbnormalityText = abnStrings.join('; ') || 'NIL';
 
-    // HQ Logic
+    // Update Hidden Field for PDF
+    const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
+    if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = fullAbnormalityText;
+
+    // F. Stats
+    let maxSpeed = '0', avgSpeed = '0';
+    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
+        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
+        maxSpeed = overall.maxSpeed || '0';
+        avgSpeed = overall.averageSpeed || '0';
+    }
+
+    // G. Generate Unique ID Locally
+    const uniqueTripId = `${lpId}_${trainNo}_${journeyDate.replace(/\//g, '-')}`;
+
+    // --- 3. HQ ROUTING ---
     let storedHq = localStorage.getItem('currentSessionHq');
     if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
     let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
+    
+    console.log(`Routing HQ: ${currentHq}`);
+    let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
 
-    // 3. CONSTRUCT STRICT ORDERED PAYLOAD (Exactly matching Sheet1 Headers)
-    // We create a new object to ensure clean data transmission
-    const orderedPayload = {
-        // --- Sheet1 Columns Mapping ---
-        dateTime: new Date().toLocaleString('en-GB'), // Current Timestamp
-        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI Name', 'CLI']) || data.cliName || '', // Fallback to manual entry
-        journeyDate: jDate,
-        trainNo: getVal(data.trainDetails, ['Train No', 'Train Number']),
-        locoNo: getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']),
-        fromStn: fromStn,
-        toStn: toStn,
+    // --- 4. CONSTRUCT FINAL PAYLOAD (Strict Order) ---
+    const payload = {
+        dateTime: new Date().toLocaleString('en-GB'),
+        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '', 
+        journeyDate: journeyDate,
+        trainNo: trainNo,
+        locoNo: locoNo,
+        fromStn: fromStn, // Now comes from First Station
+        toStn: toStn,     // Now comes from Last Station
         rakeType: getVal(data.trainDetails, ['Rake', 'Type']),
-        mps: getVal(data.trainDetails, ['MPS', 'Max Speed', 'Permissible']),
-        section: getVal(data.trainDetails, ['Section']),
+        mps: getVal(data.trainDetails, ['MPS', 'Max', 'Permissible']),
+        section: getVal(data.trainDetails, ['Section']), // This remains NGP-BSP (Fixed Route)
         
-        lpId: getVal(data.lpDetails, ['LP ID', 'ID']),
-        lpName: getVal(data.lpDetails, ['LP Name', 'Name']),
-        lpGroup: getVal(data.lpDetails, ['Group', 'HQ']),
+        lpId: lpId,
+        lpName: lpName,
+        lpGroupCli: lpGroup,
         
-        alpId: getVal(data.alpDetails, ['ALP ID', 'ID']),
-        alpName: getVal(data.alpDetails, ['ALP Name', 'Name']),
-        alpGroup: getVal(data.alpDetails, ['Group', 'HQ']),
+        alpId: alpId,
+        alpName: alpName,
+        alpGroupCli: alpGroup,
         
-        bftStatus: document.getElementById('bftRemark')?.value.trim() || 'NA',
-        bptStatus: document.getElementById('bptRemark')?.value.trim() || 'NA',
+        bftStatus: data.bftDetails?.time ? "Done" : "Not done",
+        bptStatus: data.bptDetails?.time ? "Done" : "Not done",
         overspeedCount: data.overSpeedDetails ? data.overSpeedDetails.length : 0,
         totalDist: data.speedRangeSummary?.totalDistance || '0',
         avgSpeed: avgSpeed,
@@ -105,7 +155,7 @@ async function sendDataToGoogleSheet(data) {
         cliObs: document.getElementById('cliRemarks')?.value.trim() || 'NIL',
         actionTaken: document.querySelector('input[name="actionTakenRadio"]:checked')?.value || 'NIL',
         
-        // Abnormality Counts (0/1)
+        // Abnormality Flags
         bftNotDone: abn.bft_nd,
         bptNotDone: abn.bpt_nd,
         bftRule: abn.bft_rule,
@@ -113,26 +163,18 @@ async function sendDataToGoogleSheet(data) {
         lateCtrl: abn.late_ctrl,
         overspeed: abn.overspeed,
         other: abn.others,
-        totalAbn: document.getElementById('totalAbnormality')?.value.trim() || '0',
+        totalAbn: totalAbn,
         
-        spare: '', // Reserved column
-        uniqueId: '', // Script will generate this or we can leave empty
+        spare: '', 
+        uniqueId: uniqueTripId, 
         
-        // --- Extra Data for Tab 2 (Detailed Stops) ---
-        stops: data.stops, // Array for detailed sheet
-        abnormalityText: abnStrings.join('; \n') || 'NIL', // Full text for PDF/Sheet
+        // Extra Data
+        stops: data.stops,
+        abnormalityText: fullAbnormalityText,
         cliHq: currentHq
     };
 
-    // Update CLI Abnormalities field for PDF generation before sending
-    const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
-    if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = orderedPayload.abnormalityText;
-
-    // Routing
-    let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
-    console.log(`Routing to: ${targetUrl.includes('other') ? 'Other' : 'Primary'} based on HQ: ${currentHq}`);
-
-    // Send
+    // --- 5. SEND ---
     try {
         await fetch(targetUrl, {
             method: 'POST',
@@ -140,18 +182,18 @@ async function sendDataToGoogleSheet(data) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 type: 'data',
-                payload: orderedPayload // Sending the clean, ordered object
+                payload: payload
             })
         });
         console.log('Data sent successfully.');
     } catch (error) {
-        console.error('Error in fetch:', error);
-        alert('Network Error. Data could not be saved.');
+        console.error('Submission Error:', error);
+        alert('Network Error: Data could not be saved to Sheet.');
         throw error;
     }
 }
 
-// --- Event Listener (Button Logic) ---
+// --- Event Listener ---
 document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.getElementById('downloadReport');
     const loadingOverlay = document.getElementById('loadingOverlay');
@@ -159,6 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (downloadButton) {
         downloadButton.addEventListener('click', async () => { 
             let isValid = true;
+            
             document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
                 const textId = chk.dataset.textId;
                 if (textId) {
@@ -205,8 +248,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         window.location.href = 'index.html'; 
                     } else { alert('PDF function missing.'); }
                 } catch (error) { 
-                    console.error("Error:", error);
-                    alert("Error during submission: " + error.message);
+                    console.error("Process Error:", error);
+                    alert("Error: " + error.message);
                     downloadButton.disabled = false;
                     downloadButton.textContent = 'Download Report';
                     if(loadingOverlay) loadingOverlay.style.display = 'none';
