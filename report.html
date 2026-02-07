@@ -1188,45 +1188,43 @@ async function generatePDF() { // <<< 1. Function ko ASYNC banaya gaya
         y += 10;
 
         // --- Driving Analysis (केवल 11-पॉइंट्स वैल्यूज जोड़ी गई हैं) ---
+        // --- Driving Analysis (केवल 11-पॉइंट्स वैल्यूज जोड़ी गई हैं) ---
         if (reportData.stops?.length > 0) {
              const drivingBody = reportData.stops.map((stop, index) => {
                  const systemAnalysisSelect = document.querySelector(`.system-analysis-dropdown[data-stop-index="${index}"]`);
                  const finalSystemAnalysis = systemAnalysisSelect ? systemAnalysisSelect.value : stop.brakingTechnique;
                  const cliRemarkInput = document.querySelector(`.cli-remark-input-row[data-stop-index="${index}"]`);
                  const cliRemark = cliRemarkInput ? cliRemarkInput.value.trim() : 'NIL';
-                return [
-                     stop.group, stop.stopLocation, stop.timeString, stop.startTiming,
-                     (stop.kilometer / 1000).toFixed(2),
-                     // 11 Speed Points Mapping (इंडेक्स 0 से 10)
-                     stop.speedsBefore[0] ? parseFloat(stop.speedsBefore[0]).toFixed(0) : '0',
-                     stop.speedsBefore[1] ? parseFloat(stop.speedsBefore[1]).toFixed(0) : '0',
-                     stop.speedsBefore[2] ? parseFloat(stop.speedsBefore[2]).toFixed(0) : '0',
-                     stop.speedsBefore[3] ? parseFloat(stop.speedsBefore[3]).toFixed(0) : '0',
-                     stop.speedsBefore[4] ? parseFloat(stop.speedsBefore[4]).toFixed(0) : '0',
-                     stop.speedsBefore[5] ? parseFloat(stop.speedsBefore[5]).toFixed(0) : '0',
-                     stop.speedsBefore[6] ? parseFloat(stop.speedsBefore[6]).toFixed(0) : '0',
-                     stop.speedsBefore[7] ? parseFloat(stop.speedsBefore[7]).toFixed(0) : '0',
-                     stop.speedsBefore[8] ? parseFloat(stop.speedsBefore[8]).toFixed(0) : '0',
-                     stop.speedsBefore[9] ? parseFloat(stop.speedsBefore[9]).toFixed(0) : '0',
-                     stop.speedsBefore[10] ? parseFloat(stop.speedsBefore[10]).toFixed(0) : '0',
+                 return [
+                     stop.group, 
+                     stop.stopLocation.substring(0,12), // Location को छोटा किया जगह बचाने के लिए
+                     stop.timeString.split(' ')[1] || stop.timeString,
+                     (stop.kilometer / 1000).toFixed(1),
+                     // 11 Speed Points Mapping (0 से 10 इंडेक्स)
+                     stop.speedsBefore[0] || '0', stop.speedsBefore[1] || '0', stop.speedsBefore[2] || '0', 
+                     stop.speedsBefore[3] || '0', stop.speedsBefore[4] || '0', stop.speedsBefore[5] || '0', 
+                     stop.speedsBefore[6] || '0', stop.speedsBefore[7] || '0', stop.speedsBefore[8] || '0', 
+                     stop.speedsBefore[9] || '0', stop.speedsBefore[10] || '0',
                      finalSystemAnalysis,
                      cliRemark
                  ];
              });
+
              doc.autoTable({
                  startY: y,
-                 // 11 पॉइंट्स के लिए हेडर्स को अपडेट किया
-                 head: [['Sr', 'Location', 'Stop', 'Start', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'System', 'Remark']],
+                 // Headers को 11 पॉइंट्स के लिए अपडेट किया गया
+                 head: [['Sr', 'Loc', 'Time', 'Km', '2k', '1k', '800', '600', '500', '400', '300', '100', '50', '20', '0', 'Sys', 'Remark']],
                  body: drivingBody,
                  theme: 'grid',
-                 headStyles: { fillColor: [0, 51, 102], fontSize: 6, cellPadding: 1, textColor: 255 },
-                 bodyStyles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
+                 headStyles: { fillColor: [0, 51, 102], fontSize: 5.5, cellPadding: 0.5, textColor: 255 },
+                 bodyStyles: { fontSize: 5.5, cellPadding: 0.5 },
                  columnStyles: {
-                     // विड्थ को 11 पॉइंट्स फिट करने के लिए एडजस्ट किया गया
-                     0: { cellWidth: 7 }, 1: { cellWidth: 20 }, 2: { cellWidth: 15 }, 3: { cellWidth: 15 }, 4: { cellWidth: 10 },
-                     5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 7 }, 8: { cellWidth: 7 }, 9: { cellWidth: 7 },
-                     10: { cellWidth: 7 }, 11: { cellWidth: 7 }, 12: { cellWidth: 7 }, 13: { cellWidth: 7 }, 14: { cellWidth: 7 },
-                     15: { cellWidth: 7 }, 16: { cellWidth: 15 }, 17: { cellWidth: 20 }
+                     // विड्थ को 11 पॉइंट्स फिट करने के लिए छोटा किया गया
+                     0: { cellWidth: 5 }, 1: { cellWidth: 20 }, 2: { cellWidth: 14 }, 3: { cellWidth: 8 },
+                     4: { cellWidth: 7 }, 5: { cellWidth: 7 }, 6: { cellWidth: 7 }, 7: { cellWidth: 7 }, 
+                     8: { cellWidth: 7 }, 9: { cellWidth: 7 }, 10: { cellWidth: 7 }, 11: { cellWidth: 7 }, 
+                     12: { cellWidth: 7 }, 13: { cellWidth: 7 }, 14: { cellWidth: 7 },
+                     15: { cellWidth: 12 }, 16: { cellWidth: 18 }
                  },
                  didDrawPage: (data) => { if(data.pageNumber > 1) { addFooter(); } }
              });
