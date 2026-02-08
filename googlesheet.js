@@ -3,121 +3,213 @@ async function sendDataToGoogleSheet(data) {
     const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbzkE520L99kDeySMkqq7eTz0cmKnf2knMwVzME1OKDEaxcYkbjauRmWaudJvBKIQ76N/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
-    console.log("Fixing Missing Columns: Train, Loco, From, To...");
+    console.log("Preparing Clean Payload...");
 
-    // 1. Precise Value Extractor (Matches RTIS.js labels exactly)
-    const getVal = (arr, labelKey) => {
-        if (!arr || !Array.isArray(arr)) return '-';
-        // RTIS.js के ऑब्जेक्ट स्ट्रक्चर {label: '...', value: '...'} को चेक करें
-        const found = arr.find(item => item && item.label && item.label.trim() === labelKey);
-        if (found) return String(found.value).trim();
+    // 1. SUPER-CLEAN GET VALUE FUNCTION
+    // यह फ़ंक्शन डेटा में से कचरा (", \n) हटाकर मैच करेगा
+    const getVal = (arr, labels) => {
+        if (!arr || !Array.isArray(arr)) return '';
+        const searchLabels = Array.isArray(labels) ? labels : [labels];
+        
+        // Helper to clean strings: remove quotes, newlines, trim
+        const clean = (str) => String(str || '').replace(/["\n\r]/g, '').trim().toLowerCase();
 
-        // अगर पूरा मैच न हो, तो partial match ट्राई करें
-        const partial = arr.find(item => item && item.label && item.label.toLowerCase().includes(labelKey.toLowerCase()));
-        return partial ? String(partial.value).trim() : '-';
+        const item = arr.find(d => {
+            if (!d) return false;
+            // Handle Object {label: "...", value: "..."}
+            if (typeof d === 'object' && d.label) {
+                const cleanLabel = clean(d.label);
+                return searchLabels.some(l => cleanLabel.includes(clean(l)));
+            }
+            // Handle String "Loco No: 123"
+            return searchLabels.some(l => clean(d).includes(clean(l)));
+        });
+
+        if (!item) return '';
+
+        let result = '';
+        if (typeof item === 'object') {
+            result = item.value || '';
+        } else {
+            const strItem = String(item);
+            result = strItem.includes(':') ? strItem.split(':')[1] : strItem;
+        }
+        // Return cleaned result (remove quotes/newlines from the value too)
+        return String(result).replace(/["\n\r]/g, '').trim();
     };
 
-    // --- डेटा मैपिंग (As per RTIS.js) ---
+    // --- 2. PREPARE DATA ---
 
-    // A. DateTime (आपका डिफ़ॉल्ट फॉर्मेट जो A और B कॉलम भरता है)
-    const currentDateTime = new Date().toLocaleString('en-GB');
+    // A. Manual Date Formatting (No Commas allowed!)
+    const now = new Date();
+    const currentDateTime = 
+        ('0' + now.getDate()).slice(-2) + '/' + 
+        ('0' + (now.getMonth()+1)).slice(-2) + '/' + 
+        now.getFullYear() + ' ' + 
+        ('0' + now.getHours()).slice(-2) + ':' + 
+        ('0' + now.getMinutes()).slice(-2) + ':' + 
+        ('0' + now.getSeconds()).slice(-2);
 
-    // B. Missing Data Extraction (RTIS.js के सही लेबल्स का उपयोग)
-    let locoNo = getVal(data.trainDetails, 'Loco Number');  // RTIS.js में 'Loco Number' है
-    let trainNo = getVal(data.trainDetails, 'Train Number'); // RTIS.js में 'Train Number' है
-    let rakeType = getVal(data.trainDetails, 'Type of Rake');
-    let mps = getVal(data.trainDetails, 'Max Permissible Speed');
-    let section = getVal(data.trainDetails, 'Section');
-    let cliName = getVal(data.trainDetails, 'Analysis By') || data.cliName || '-';
-
-    // C. From/To Station Logic
-    let fromStn = '-';
-    let toStn = '-';
-    // पहले Station Timings (Page 7) से कोशिश करें
-    if (data.stationStops && data.stationStops.length > 0) {
-        fromStn = data.stationStops[0].station || '-';
-        toStn = data.stationStops[data.stationStops.length - 1].station || '-';
-    } else {
-        // अगर वहां नहीं है, तो 'Route' लेबल (जैसे "DURG-BSP") को तोड़ें
-        const routeVal = getVal(data.trainDetails, 'Route');
-        if (routeVal && routeVal.includes('-')) {
-            const parts = routeVal.split('-');
-            fromStn = parts[0].trim();
-            toStn = parts[1].trim();
+    // B. From/To Station (With fallback)
+    let fromStn = '';
+    let toStn = '';
+    // Try getting from Station List (First/Last)
+    if (data.stationStops && Array.isArray(data.stationStops) && data.stationStops.length > 0) {
+        fromStn = data.stationStops[0].station || '';
+        toStn = data.stationStops[data.stationStops.length - 1].station || '';
+    }
+    // If empty, force extract from Route
+    if (!fromStn || !toStn) {
+        const route = getVal(data.trainDetails, ['Route', 'Section']);
+        if (route && route.includes('-')) {
+            const parts = route.split('-');
+            if(!fromStn) fromStn = parts[0].trim();
+            if(!toStn) toStn = parts[1].trim();
         }
     }
 
-    // D. Journey Date (Analysis Time से तारीख निकालना)
-    let journeyDate = '-';
-    const analysisTime = getVal(data.trainDetails, 'Analysis Time');
-    const dateMatch = analysisTime.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
-    if (dateMatch) journeyDate = dateMatch[0];
+    // C. Journey Date (Logic to find Date in mixed text)
+    let journeyDate = getVal(data.trainDetails, ['Journey Date', 'Date']);
+    if (!journeyDate || journeyDate.length < 6) {
+        // Fallback: Scan everything for a date pattern
+        const dateItem = data.trainDetails.find(d => {
+            const val = typeof d === 'object' ? d.value : String(d);
+            return val && val.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/);
+        });
+        if (dateItem) {
+            const val = typeof dateItem === 'object' ? dateItem.value : String(dateItem);
+            const matches = val.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/);
+            if (matches) journeyDate = matches[0];
+        }
+    }
+    // Ensure Date is valid
+    if (!journeyDate) journeyDate = new Date().toLocaleDateString('en-GB');
 
-    // E. Crew Data Cleaning (Headers हटाना)
-    const cleanCrew = (arr, key) => {
-        if (!arr) return '-';
-        const str = arr.find(s => typeof s === 'string' && s.toLowerCase().includes(key.toLowerCase()));
-        return str && str.includes(':') ? str.split(':')[1].trim() : (str ? str.trim() : '-');
+    // D. Extract Other Fields
+    // Use arrays for synonyms to catch variations
+    let trainNo = getVal(data.trainDetails, ['Train No', 'Train Number', 'Train']);
+    let locoNo = getVal(data.trainDetails, ['Loco No', 'Loco Number', 'Loco']);
+    let section = getVal(data.trainDetails, ['Section']) || getVal(data.trainDetails, ['Route']);
+    let rakeType = getVal(data.trainDetails, ['Type of Rake', 'Rake Type', 'Rake']);
+    let mps = getVal(data.trainDetails, ['Max Permissible', 'MPS', 'Max Speed']);
+    
+    // Fallback for Train/Loco if they are somehow empty but present in header
+    if (!locoNo && data.trainDetails[0]?.value) locoNo = data.trainDetails[0].value; // Blind guess if desperate
+
+    let lpId = getVal(data.lpDetails, ['LP ID', 'ID']);
+    let lpName = getVal(data.lpDetails, ['LP Name', 'Name']);
+    let lpGroup = getVal(data.lpDetails, ['Group', 'HQ']);
+    let alpId = getVal(data.alpDetails, ['ALP ID', 'ID']);
+    let alpName = getVal(data.alpDetails, ['ALP Name', 'Name']);
+    let alpGroup = getVal(data.alpDetails, ['Group', 'HQ']);
+
+    // E. Stats
+    let maxSpeed = '0', avgSpeed = '0';
+    if (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) {
+        const overall = data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0];
+        maxSpeed = overall.maxSpeed || '0';
+        avgSpeed = overall.averageSpeed || '0';
+    }
+
+    // F. Abnormalities
+    const abn = {
+        bft_nd: document.getElementById('chk-bft-nd')?.checked ? 1 : 0,
+        bpt_nd: document.getElementById('chk-bpt-nd')?.checked ? 1 : 0,
+        bft_rule: document.getElementById('chk-bft-rule')?.checked ? 1 : 0,
+        bpt_rule: document.getElementById('chk-bpt-rule')?.checked ? 1 : 0,
+        late_ctrl: document.getElementById('chk-late-ctrl')?.checked ? 1 : 0,
+        overspeed: document.getElementById('chk-overspeed')?.checked ? 1 : 0,
+        others: document.getElementById('chk-others')?.checked ? 1 : 0
     };
+    const totalAbn = Object.values(abn).reduce((a, b) => a + b, 0);
 
-    let lpId = cleanCrew(data.lpDetails, 'LP ID');
-    let lpName = cleanCrew(data.lpDetails, 'LP Name');
-    let lpGroup = cleanCrew(data.lpDetails, 'Group');
-    let alpId = cleanCrew(data.alpDetails, 'ALP ID');
-    let alpName = cleanCrew(data.alpDetails, 'ALP Name');
-    let alpGroup = cleanCrew(data.alpDetails, 'Group');
+    // G. Construct Text for PDF/Sheet
+    const abnStrings = [];
+    if (abn.bft_nd) abnStrings.push("BFT not done");
+    if (abn.bpt_nd) abnStrings.push("BPT not done");
+    if (abn.bft_rule) abnStrings.push(`BFT Rule: ${document.getElementById('txt-bft-rule')?.value.trim()}`);
+    if (abn.bpt_rule) abnStrings.push(`BPT Rule: ${document.getElementById('txt-bpt-rule')?.value.trim()}`);
+    if (abn.late_ctrl) abnStrings.push(`Late Ctrl: ${document.getElementById('txt-late-ctrl')?.value.trim()}`);
+    if (abn.overspeed) abnStrings.push(`Overspeed: ${document.getElementById('txt-overspeed')?.value.trim()}`);
+    if (abn.others) abnStrings.push(`Other: ${document.getElementById('txt-others')?.value.trim()}`);
+    const fullAbnormalityText = abnStrings.join('; ') || 'NIL';
+    
+    const cliAbnormalitiesArea = document.getElementById('cliAbnormalities');
+    if(cliAbnormalitiesArea) cliAbnormalitiesArea.value = fullAbnormalityText;
 
-    // --- पेलोड तैयार करना (Strict Order) ---
+    // H. HQ Routing
+    let storedHq = localStorage.getItem('currentSessionHq');
+    if (!storedHq && document.getElementById('cliHqDisplay')) storedHq = document.getElementById('cliHqDisplay').value;
+    let currentHq = storedHq ? storedHq.toString().trim().toUpperCase() : "UNKNOWN";
+    let targetUrl = ALLOWED_HQS.includes(currentHq) ? primaryAppsScriptUrl : otherAppsScriptUrl;
+
+    // --- 3. FINAL PAYLOAD (Corrected Keys & No Commas) ---
     const payload = {
-        dateTime: currentDateTime, 
-        cliName: cliName,
+        dateTime: currentDateTime, // Fixed
+        cliName: getVal(data.trainDetails, ['Analysis By', 'CLI']) || data.cliName || '',
         journeyDate: journeyDate,
-        trainNo: trainNo,   // अब यह खाली नहीं आएगा
-        locoNo: locoNo,     // अब यह खाली नहीं आएगा
-        fromStn: fromStn,   // अब यह खाली नहीं आएगा
-        toStn: toStn,       // अब यह खाली नहीं आएगा
+        trainNo: trainNo, // Should now be found due to cleaner regex
+        locoNo: locoNo,   // Should now be found
+        fromStn: fromStn,
+        toStn: toStn,
         rakeType: rakeType,
         mps: mps,
         section: section,
+        
         lpId: lpId,
         lpName: lpName,
         lpGroupCli: lpGroup,
+        
         alpId: alpId,
         alpName: alpName,
         alpGroupCli: alpGroup,
+        
         bftStatus: data.bftDetails?.time ? "Done" : "Not done",
         bptStatus: data.bptDetails?.time ? "Done" : "Not done",
         overspeedCount: data.overSpeedDetails ? data.overSpeedDetails.length : 0,
         totalDist: data.speedRangeSummary?.totalDistance || '0',
-        avgSpeed: (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) ? (data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0]).averageSpeed : '0',
-        maxSpeed: (data.sectionSpeedSummary && data.sectionSpeedSummary.length > 0) ? (data.sectionSpeedSummary.find(s => s.section.includes('Overall')) || data.sectionSpeedSummary[0]).maxSpeed : '0',
+        avgSpeed: avgSpeed,
+        maxSpeed: maxSpeed,
+        
         cliObs: document.getElementById('cliRemarks')?.value.trim() || 'NIL',
         actionTaken: document.querySelector('input[name="actionTakenRadio"]:checked')?.value || 'NIL',
+        
+        bftNotDone: abn.bft_nd,
+        bptNotDone: abn.bpt_nd,
+        bftRule: abn.bft_rule,
+        bptRule: abn.bpt_rule,
+        lateCtrl: abn.late_ctrl,
+        overspeed: abn.overspeed,
+        other: abn.others,
+        totalAbn: totalAbn,
+        
+        spare: '', 
         uniqueId: `${lpId}_${trainNo}_${journeyDate.replace(/\//g, '-')}`,
-        abnormalityText: document.getElementById('cliAbnormalities')?.value || 'NIL',
-        cliHq: localStorage.getItem('currentSessionHq') || 'UNKNOWN'
+        
+        stops: data.stops,
+        abnormalityText: fullAbnormalityText,
+        cliHq: currentHq
     };
 
-    // --- SENDING ---
-    let storedHq = localStorage.getItem('currentSessionHq') || (document.getElementById('cliHqDisplay') ? document.getElementById('cliHqDisplay').value : "UNKNOWN");
-    let targetUrl = ALLOWED_HQS.includes(storedHq.toUpperCase()) ? primaryAppsScriptUrl : otherAppsScriptUrl;
-
+    // --- 4. SEND ---
     try {
         await fetch(targetUrl, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'data', payload: payload })
+            body: JSON.stringify({
+                type: 'data',
+                payload: payload
+            })
         });
         console.log('Data sent successfully.');
     } catch (error) {
         console.error('Submission Error:', error);
-        alert('Data could not be saved to Sheet.');
+        alert('Network Error: Data could not be saved to Sheet.');
         throw error;
     }
 }
 
-// बाकी इवेंट लिसनर वाला हिस्सा सेम रहेगा...
 // --- Event Listener ---
 document.addEventListener('DOMContentLoaded', () => {
     const downloadButton = document.getElementById('downloadReport');
@@ -182,4 +274,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }); 
     }
 });
-
