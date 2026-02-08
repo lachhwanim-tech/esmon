@@ -118,3 +118,68 @@ async function sendDataToGoogleSheet(data) {
 }
 
 // बाकी इवेंट लिसनर वाला हिस्सा सेम रहेगा...
+// --- Event Listener ---
+document.addEventListener('DOMContentLoaded', () => {
+    const downloadButton = document.getElementById('downloadReport');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+
+    if (downloadButton) {
+        downloadButton.addEventListener('click', async () => { 
+            let isValid = true;
+            document.querySelectorAll('#abnormalities-checkbox-container input[type="checkbox"]:checked').forEach(chk => {
+                const textId = chk.dataset.textId;
+                if (textId) {
+                    const textField = document.getElementById(textId);
+                    if (!textField || !textField.value.trim()) {
+                        alert(`Please enter a remark for the selected abnormality.`);
+                        isValid = false;
+                    }
+                }
+            });
+            if (!document.querySelector('input[name="actionTakenRadio"]:checked')) {
+                 alert('Please select an option for "Action Taken".');
+                 isValid = false;
+            }
+            if (!isValid) return;
+
+            downloadButton.disabled = true;
+            downloadButton.textContent = 'Processing...';
+            if(loadingOverlay) loadingOverlay.style.display = 'flex';
+
+            const reportDataString = localStorage.getItem('spmReportData');
+            if (reportDataString) {
+                let reportData;
+                try { reportData = JSON.parse(reportDataString); } 
+                catch(e) { 
+                    alert("Error retrieving data."); 
+                    if(loadingOverlay) loadingOverlay.style.display = 'none';
+                    return; 
+                }
+
+                try {
+                    await sendDataToGoogleSheet(reportData);
+                    
+                    if (typeof generatePDF === 'function') {
+                        await generatePDF(); 
+                        alert('Data submitted and report generated. Redirecting...');
+                        localStorage.removeItem('spmReportData');
+                        localStorage.removeItem('currentSessionHq');
+                        localStorage.removeItem('isOtherCliMode');
+                        localStorage.removeItem('customCliName');
+                        window.location.href = 'index.html'; 
+                    } else { alert('PDF function missing.'); }
+                } catch (error) { 
+                    console.error("Process Error:", error);
+                    alert("Error: " + error.message);
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = 'Download Report';
+                    if(loadingOverlay) loadingOverlay.style.display = 'none';
+                }
+            } else {
+                alert('No report data found.');
+                if(loadingOverlay) loadingOverlay.style.display = 'none';
+            }
+        }); 
+    }
+});
+
