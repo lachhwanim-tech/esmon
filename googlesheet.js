@@ -1,6 +1,6 @@
 async function sendDataToGoogleSheet(data) {
-    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbwWseedDNyuT4_iZ3xoQF2NgAhmwLAKwUKDnYYR341hkiwjlyUl_jwRdasOnlrmyQEP/exec';
-    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbwWseedDNyuT4_iZ3xoQF2NgAhmwLAKwUKDnYYR341hkiwjlyUl_jwRdasOnlrmyQEP/exec'; 
+    const primaryAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbwpXbXtkv8uOYDxfyM_VDVe2aFolO2swkg8DqbvyIBK9Ml845m9njiMSZrlONTr1eQL/exec';
+    const otherAppsScriptUrl = 'https://script.google.com/macros/s/AKfycbwpXbXtkv8uOYDxfyM_VDVe2aFolO2swkg8DqbvyIBK9Ml845m9njiMSZrlONTr1eQL/exec'; 
     const ALLOWED_HQS = ['BYT', 'R', 'RSD', 'DBEC', 'DURG', 'DRZ', 'MXA', 'BYL', 'BXA', 'AAGH', 'PPYD'];
 
     console.log("Preparing Clean Payload...");
@@ -191,33 +191,23 @@ async function sendDataToGoogleSheet(data) {
         cliHq: currentHq
     };
 
-    // --- 4. SEND (Updated for Alert) ---
-    try {
-        const response = await fetch(targetUrl, {
-            method: 'POST',
-            // 'no-cors' hataya gaya hai taaki hum status padh sakein
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type: 'data',
-                payload: payload
-            })
-        });
-
-        // Google Sheet se aaya jawab padhna
-        const result = await response.json(); 
-
-        if (result.status === 'duplicate') {
-            alert(`इस डाटा जांच को, ${result.date} को ${result.cli} द्वारा पहले ही कर पूर्ण कर दिया गया है। कृपया ध्यान देवे, डुप्लीकेट डाटा जांच जमा किया जाना अस्वीकार्य है। सहायता के लिए CLI TELOC- Mukesh Lachhwani-9752443479 से संपर्क करें।`);
-            if(loadingOverlay) loadingOverlay.style.display = 'none';
-            return; // Duplicate milne par process yahi rok dena
-        }
-
-        console.log('Data sent successfully.');
-    } catch (error) {
-        console.error('Submission Error:', error);
-        alert('Network Error: Data could not be saved to Sheet.');
-        throw error;
-    }
+    // --- 4. SEND ---
+    try {
+        await fetch(targetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'data',
+                payload: payload
+            })
+        });
+        console.log('Data sent successfully.');
+    } catch (error) {
+        console.error('Submission Error:', error);
+        alert('Network Error: Data could not be saved to Sheet.');
+        throw error;
+    }
 }
 
 // --- Event Listener ---
